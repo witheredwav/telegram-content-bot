@@ -1,10 +1,9 @@
 import random
-import string
-from datetime import datetime, timedelta
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.enums import ChatMemberStatus
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from config import ADMIN_ID, CHANNEL_USERNAME
 from db import *
@@ -12,40 +11,15 @@ from keyboards import start_kb, menu_kb, admin_kb
 
 router = Router()
 
-cooldown = {}
-pending_admin = {}
-pending_ref = {}
-
-
-# ================= ANTI SPAM =================
-def anti_spam(user_id):
-    now = datetime.now()
-    if user_id in cooldown:
-        if now - cooldown[user_id] < timedelta(seconds=2):
-            return False
-    cooldown[user_id] = now
-    return True
-
-
-# ================= REF CODE =================
-def gen_ref():
-    return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(9))
+pending = {}
 
 
 # ================= START =================
 @router.message(F.text.startswith("/start"))
 async def start(msg: Message):
 
-    if not anti_spam(msg.from_user.id):
-        return
-
     await add_user(msg.from_user.id)
     await add_stat("start")
-
-    args = msg.text.split()
-
-    if len(args) > 1:
-        pending_ref[msg.from_user.id] = args[1]
 
     await msg.answer("👋 Добро пожаловать", reply_markup=start_kb())
 
@@ -53,9 +27,6 @@ async def start(msg: Message):
 # ================= CHECK SUB =================
 @router.callback_query(F.data == "check")
 async def check(cb: CallbackQuery):
-
-    if not anti_spam(cb.from_user.id):
-        return
 
     await add_stat("check")
 
@@ -72,63 +43,13 @@ async def check(cb: CallbackQuery):
         await cb.message.answer("❌ Нет подписки")
         return
 
-    # ================= REF LOGIC =================
-    ref_code = pending_ref.get(cb.from_user.id)
-
-    if ref_code:
-
-        owner = await get_ref_owner(ref_code)
-
-        if owner == cb.from_user.id:
-            await cb.message.answer("⚠️ Самореферал")
-        else:
-            if not await ref_exists(cb.from_user.id):
-                await add_invite(ref_code)
-                await save_ref_log(cb.from_user.id, ref_code)
-
-        pending_ref.pop(cb.from_user.id)
-
-    await cb.message.answer("✅ OK", reply_markup=menu_kb())
-    await cb.answer()
-
-
-# ================= REF =================
-@router.callback_query(F.data == "ref")
-async def ref(cb: CallbackQuery):
-
-    data = await get_ref(cb.from_user.id)
-
-    if not data:
-        code = gen_ref()
-        await create_ref(cb.from_user.id, code)
-        data = (code, 0)
-
-    inv = data[1]
-
-    if inv >= 20:
-        discount = 20
-    elif inv >= 10:
-        discount = 15
-    elif inv >= 5:
-        discount = 10
-    else:
-        discount = 0
-
-    await cb.message.answer(
-        f"""👥 REF SYSTEM
-
-🔑 Code: {data[0]}
-👥 Invites: {inv}
-
-🎁 Discount: {discount}%
-"""
-    )
+    await cb.message.answer("✅ Доступ открыт", reply_markup=menu_kb())
 
 
 # ================= CODE =================
 @router.callback_query(F.data == "code")
 async def code(cb: CallbackQuery):
-    await cb.message.answer("🔑 Введи код")
+    await cb.message.answer("🔑 Введите 5-значный код")
 
 
 @router.message(F.text.regexp(r"^\d{5}$"))
@@ -142,10 +63,10 @@ async def enter_code(msg: Message):
         await msg.answer("❌ Неверный код")
         return
 
-    await msg.answer(data[1])
+    await msg.answer(f"📦 Контент:\n\n{data[1]}")
 
 
-# ================= ADMIN =================
+# ================= ADMIN PANEL =================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
     if msg.from_user.id != ADMIN_ID:
@@ -161,33 +82,55 @@ async def stats(cb: CallbackQuery):
     if cb.from_user.id != ADMIN_ID:
         return
 
-    await cb.message.answer(f"""
-📊 STATS
+    text = f"""
+📊 STATISTICS
 
-Users: {await users_count()}
-Codes: {await codes_count()}
-start: {await get_stat("start")}
-check: {await get_stat("check")}
-code: {await get_stat("code")}
-""")
+👤 Users: {await users_count() or 0}
+📦 Codes: {await codes_count() or 0}
+
+start: {await get_stat("start") or 0}
+check: {await get_stat("check") or 0}
+code: {await get_stat("code") or 0}
+"""
+
+    await cb.message.answer(text.strip())
 
 
-# ================= CODES =================
+# ================= CODES LIST (BUTTONS) =================
 @router.callback_query(F.data == "admin_codes")
 async def codes(cb: CallbackQuery):
 
-    if cb.from_user.id != ADMIN_ID:
-        return
-
-    data = await get_all_codes()
+    data = await get_all_codes_full()
 
     if not data:
         await cb.message.answer("❌ Нет кодов")
         return
 
-    text = "\n".join([i[0] for i in data])
+    kb = []
 
-    await cb.message.answer(f"📦 CODES:\n\n{text}")
+    for code, content in data:
+        kb.append([
+            InlineKeyboardButton(
+                text=f"🔑 {code}",
+                callback_data=f"del_code:{code}"
+            )
+        ])
+
+    await cb.message.answer(
+        "📦 КОДЫ (нажми для удаления)",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb)
+    )
+
+
+# ================= DELETE CODE =================
+@router.callback_query(F.data.startswith("del_code:"))
+async def del_code(cb: CallbackQuery):
+
+    code = cb.data.split(":")[1]
+
+    await delete_code_db(code)
+
+    await cb.message.answer(f"🗑 Код {code} удалён")
 
 
 # ================= CREATE CODE =================
@@ -195,7 +138,7 @@ async def codes(cb: CallbackQuery):
 async def create(cb: CallbackQuery):
 
     code = str(random.randint(10000, 99999))
-    pending_admin[cb.from_user.id] = code
+    pending[cb.from_user.id] = code
 
     await cb.message.answer(f"🎲 Код: {code}\nОтправь текст")
 
@@ -203,44 +146,78 @@ async def create(cb: CallbackQuery):
 @router.message()
 async def save(msg: Message):
 
-    if msg.from_user.id != ADMIN_ID:
+    if msg.from_user.id not in pending:
         return
 
-    code = pending_admin.get(msg.from_user.id)
-    if not code:
-        return
+    code = pending[msg.from_user.id]
 
     await add_code(code, msg.text)
-    pending_admin.pop(msg.from_user.id)
+
+    pending.pop(msg.from_user.id)
 
     await msg.answer("✅ Сохранено")
 
 
-# ================= DELETE CODE =================
-@router.callback_query(F.data == "admin_delete")
-async def delete(cb: CallbackQuery):
-
-    await cb.message.answer("🗑 Отправь код")
-
-
-@router.message(F.text.regexp(r"^\d{5}$"))
-async def delete_code(msg: Message):
-
-    if msg.from_user.id != ADMIN_ID:
-        return
-
-    await delete_code(msg.text)
-    await msg.answer("🗑 Удалено")
-
-
-# ================= REFS =================
+# ================= REF SYSTEM =================
 @router.callback_query(F.data == "admin_refs")
 async def refs(cb: CallbackQuery):
 
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT * FROM referrals")
-        data = await cur.fetchall()
+    data = await get_all_refs()
 
-    text = "\n".join([str(i) for i in data])
+    if not data:
+        await cb.message.answer("❌ Нет рефералов")
+        return
 
-    await cb.message.answer(f"👥 REFS:\n\n{text}")
+    kb = []
+
+    for user_id, code, invites in data:
+        kb.append([
+            InlineKeyboardButton(
+                text=f"👤 {user_id} | {invites}",
+                callback_data=f"ref_open:{user_id}"
+            )
+        ])
+
+    await cb.message.answer(
+        "👥 РЕФЕРАЛЫ",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb)
+    )
+
+
+@router.callback_query(F.data.startswith("ref_open:"))
+async def ref_open(cb: CallbackQuery):
+
+    user_id = int(cb.data.split(":")[1])
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔄 Сброс", callback_data=f"ref_reset:{user_id}")
+        ],
+        [
+            InlineKeyboardButton(text="🗑 Удалить", callback_data=f"ref_del:{user_id}")
+        ]
+    ])
+
+    await cb.message.answer(f"👤 USER {user_id}", reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("ref_reset:"))
+async def ref_reset(cb: CallbackQuery):
+
+    user_id = int(cb.data.split(":")[1])
+
+    await reset_ref(user_id)
+
+    await cb.message.answer("🔄 Сброшено")
+
+
+@router.callback_query(F.data.startswith("ref_del:"))
+async def ref_del(cb: CallbackQuery):
+
+    user_id = int(cb.data.split(":")[1])
+
+    async with aiosqlite.connect("db.sqlite3") as db:
+        await db.execute("DELETE FROM referrals WHERE user_id=?", (user_id,))
+        await db.commit()
+
+    await cb.message.answer("🗑 Удалено")
