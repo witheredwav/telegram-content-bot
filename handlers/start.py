@@ -10,7 +10,7 @@ router = Router()
 @router.message(CommandStart())
 async def start_command(message: Message):
 
-```
+
 await add_user(
     telegram_id=message.from_user.id,
     username=message.from_user.username,
@@ -22,4 +22,4 @@ await message.answer(
     "Для получения доступа необходимо подписаться на канал.",
     reply_markup=start_keyboard()
 )
-```
+
