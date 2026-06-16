@@ -1,6 +1,8 @@
-TOKEN = "ВРЕМЕННО"
+import os
 
-CHANNEL_ID = "@witheredbots"
+TOKEN = os.getenv("TOKEN")
+
+CHANNEL_ID = "@mwitheredbots"
 
 ADMINS = [
     793806918
