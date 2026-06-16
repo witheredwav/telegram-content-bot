@@ -13,7 +13,8 @@ from keyboards import start_kb, menu_kb, admin_kb
 router = Router()
 
 cooldown = {}
-pending = {}
+pending_admin = {}
+pending_ref = {}
 
 
 # ================= ANTI SPAM =================
@@ -44,9 +45,9 @@ async def start(msg: Message):
     args = msg.text.split()
 
     if len(args) > 1:
-        await save_pending_ref(msg.from_user.id, args[1])
+        pending_ref[msg.from_user.id] = args[1]
 
-    await msg.answer("👋 Добро пожаловать!", reply_markup=start_kb())
+    await msg.answer("👋 Добро пожаловать", reply_markup=start_kb())
 
 
 # ================= CHECK SUB =================
@@ -71,61 +72,24 @@ async def check(cb: CallbackQuery):
         await cb.message.answer("❌ Нет подписки")
         return
 
-    # ================= REF ANTI FRAUD =================
-    pending_ref = await get_pending_ref(cb.from_user.id)
+    # ================= REF LOGIC =================
+    ref_code = pending_ref.get(cb.from_user.id)
 
-    if pending_ref:
+    if ref_code:
 
-        code = pending_ref[0]
-
-        owner = await get_ref_owner(code)
+        owner = await get_ref_owner(ref_code)
 
         if owner == cb.from_user.id:
-            await clear_pending_ref(cb.from_user.id)
-            await cb.message.answer("⚠️ Самореферал запрещён")
-            return
+            await cb.message.answer("⚠️ Самореферал")
+        else:
+            if not await ref_exists(cb.from_user.id):
+                await add_invite(ref_code)
+                await save_ref_log(cb.from_user.id, ref_code)
 
-        if await ref_exists(cb.from_user.id):
-            await clear_pending_ref(cb.from_user.id)
-            await cb.message.answer("⚠️ Уже засчитано")
-            return
+        pending_ref.pop(cb.from_user.id)
 
-        await add_invite(code)
-        await save_ref_log(cb.from_user.id, code)
-        await clear_pending_ref(cb.from_user.id)
-
-    await cb.message.answer("✅ Подписка подтверждена", reply_markup=menu_kb())
+    await cb.message.answer("✅ OK", reply_markup=menu_kb())
     await cb.answer()
-
-
-# ================= CODE =================
-@router.callback_query(F.data == "code")
-async def code(cb: CallbackQuery):
-
-    if not anti_spam(cb.from_user.id):
-        return
-
-    await add_stat("code_open")
-    await cb.message.answer("🔑 Введи код")
-    await cb.answer()
-
-
-@router.message(F.text.regexp(r"^\d{5}$"))
-async def enter_code(msg: Message):
-
-    if not anti_spam(msg.from_user.id):
-        return
-
-    await add_stat("code_enter")
-
-    data = await get_code(msg.text)
-
-    if not data:
-        await add_stat("wrong")
-        await msg.answer("❌ Неверный код")
-        return
-
-    await msg.answer(data[1])
 
 
 # ================= REF =================
@@ -139,15 +103,46 @@ async def ref(cb: CallbackQuery):
         await create_ref(cb.from_user.id, code)
         data = (code, 0)
 
+    inv = data[1]
+
+    if inv >= 20:
+        discount = 20
+    elif inv >= 10:
+        discount = 15
+    elif inv >= 5:
+        discount = 10
+    else:
+        discount = 0
+
     await cb.message.answer(
-        f"""👥 РЕФЕРАЛКА
+        f"""👥 REF SYSTEM
 
-🔑 Код: {data[0]}
-👥 Приглашено: {data[1]}
+🔑 Code: {data[0]}
+👥 Invites: {inv}
 
-🎁 5 друзей = 20% скидка
+🎁 Discount: {discount}%
 """
     )
+
+
+# ================= CODE =================
+@router.callback_query(F.data == "code")
+async def code(cb: CallbackQuery):
+    await cb.message.answer("🔑 Введи код")
+
+
+@router.message(F.text.regexp(r"^\d{5}$"))
+async def enter_code(msg: Message):
+
+    await add_stat("code")
+
+    data = await get_code(msg.text)
+
+    if not data:
+        await msg.answer("❌ Неверный код")
+        return
+
+    await msg.answer(data[1])
 
 
 # ================= ADMIN =================
@@ -155,11 +150,12 @@ async def ref(cb: CallbackQuery):
 async def admin(msg: Message):
     if msg.from_user.id != ADMIN_ID:
         return
-    await msg.answer("👑 ADMIN", reply_markup=admin_kb())
+
+    await msg.answer("👑 SAAS PANEL", reply_markup=admin_kb())
 
 
 # ================= STATS =================
-@router.callback_query(F.data == "stats")
+@router.callback_query(F.data == "admin_stats")
 async def stats(cb: CallbackQuery):
 
     if cb.from_user.id != ADMIN_ID:
@@ -170,9 +166,81 @@ async def stats(cb: CallbackQuery):
 
 Users: {await users_count()}
 Codes: {await codes_count()}
-
 start: {await get_stat("start")}
 check: {await get_stat("check")}
-code_enter: {await get_stat("code_enter")}
-wrong: {await get_stat("wrong")}
+code: {await get_stat("code")}
 """)
+
+
+# ================= CODES =================
+@router.callback_query(F.data == "admin_codes")
+async def codes(cb: CallbackQuery):
+
+    if cb.from_user.id != ADMIN_ID:
+        return
+
+    data = await get_all_codes()
+
+    if not data:
+        await cb.message.answer("❌ Нет кодов")
+        return
+
+    text = "\n".join([i[0] for i in data])
+
+    await cb.message.answer(f"📦 CODES:\n\n{text}")
+
+
+# ================= CREATE CODE =================
+@router.callback_query(F.data == "admin_create")
+async def create(cb: CallbackQuery):
+
+    code = str(random.randint(10000, 99999))
+    pending_admin[cb.from_user.id] = code
+
+    await cb.message.answer(f"🎲 Код: {code}\nОтправь текст")
+
+
+@router.message()
+async def save(msg: Message):
+
+    if msg.from_user.id != ADMIN_ID:
+        return
+
+    code = pending_admin.get(msg.from_user.id)
+    if not code:
+        return
+
+    await add_code(code, msg.text)
+    pending_admin.pop(msg.from_user.id)
+
+    await msg.answer("✅ Сохранено")
+
+
+# ================= DELETE CODE =================
+@router.callback_query(F.data == "admin_delete")
+async def delete(cb: CallbackQuery):
+
+    await cb.message.answer("🗑 Отправь код")
+
+
+@router.message(F.text.regexp(r"^\d{5}$"))
+async def delete_code(msg: Message):
+
+    if msg.from_user.id != ADMIN_ID:
+        return
+
+    await delete_code(msg.text)
+    await msg.answer("🗑 Удалено")
+
+
+# ================= REFS =================
+@router.callback_query(F.data == "admin_refs")
+async def refs(cb: CallbackQuery):
+
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT * FROM referrals")
+        data = await cur.fetchall()
+
+    text = "\n".join([str(i) for i in data])
+
+    await cb.message.answer(f"👥 REFS:\n\n{text}")
