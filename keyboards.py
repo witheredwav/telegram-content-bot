@@ -13,7 +13,7 @@ return InlineKeyboardMarkup(
         [
             InlineKeyboardButton(
                 text="✅ Подписаться",
-                url="https://t.me/your_channel"
+                url="https://t.me/witheredoff"
             )
         ],
         [
