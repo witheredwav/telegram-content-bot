@@ -7,6 +7,7 @@ from app.utils.logger import logger
 
 from app.database.migrate import run_migrations
 
+# handlers (user)
 from app.handlers.start import router as start_router
 from app.handlers.subscription import router as subscription_router
 from app.handlers.menu import router as menu_router
@@ -15,18 +16,22 @@ from app.handlers.referrals import router as referrals_router
 from app.handlers.request import router as request_router
 from app.handlers.code import router as code_router
 
+# handlers (admin)
 from app.handlers.admin.admin_menu import router as admin_router
 from app.handlers.admin.create_code import router as admin_create_router
+from app.handlers.admin.stats import router as stats_router
 
 
 async def main():
 
     logger.info("Bot starting...")
 
+    # применяем миграции при старте
     run_migrations()
 
     dp = Dispatcher()
 
+    # user routers
     dp.include_router(start_router)
     dp.include_router(subscription_router)
     dp.include_router(menu_router)
@@ -35,8 +40,10 @@ async def main():
     dp.include_router(request_router)
     dp.include_router(code_router)
 
+    # admin routers
     dp.include_router(admin_router)
     dp.include_router(admin_create_router)
+    dp.include_router(stats_router)
 
     logger.info("Bot started")
 
