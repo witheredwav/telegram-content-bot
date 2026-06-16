@@ -1,14 +1,20 @@
 import asyncio
-from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.memory import MemoryStorage
+
+from aiogram import Bot
+from aiogram import Dispatcher
+from aiogram.filters import CommandStart
+from aiogram import types
 
 from config import BOT_TOKEN
-import handlers
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(storage=MemoryStorage())
+bot = Bot(BOT_TOKEN)
 
-dp.include_router(handlers.router)
+dp = Dispatcher()
+
+
+@dp.message(CommandStart())
+async def start(message: types.Message):
+    await message.answer("Бот работает ✅")
 
 
 async def main():
