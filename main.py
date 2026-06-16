@@ -23,6 +23,7 @@ from app.handlers.admin.create_code import router as admin_create_router
 from app.handlers.admin.stats import router as stats_router
 from app.handlers.admin.requests_admin import router as admin_requests_router
 from app.handlers.admin.analytics import router as analytics_router
+from app.handlers.admin.orders_admin import router as orders_router
 
 
 async def main():
@@ -49,6 +50,7 @@ async def main():
     dp.include_router(stats_router)
     dp.include_router(admin_requests_router)
     dp.include_router(analytics_router)
+    dp.include_router(orders_router)
 
     logger.info("Bot started")
 
