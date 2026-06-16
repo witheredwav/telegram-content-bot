@@ -1,12 +1,20 @@
 import random
-import aiosqlite
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.enums import ChatMemberStatus
 
 from config import CHANNEL_USERNAME, ADMIN_ID
-from db import add_user, add_code, get_code, users_count, codes_count, get_all_codes
+from db import (
+    add_user,
+    add_code,
+    get_code,
+    users_count,
+    codes_count,
+    get_all_codes,
+    delete_code_db
+)
+
 from keyboards import start_kb, menu_kb
 
 router = Router()
@@ -45,7 +53,7 @@ async def check(cb: CallbackQuery):
             await cb.message.answer("❌ Вы не подписаны")
 
     except:
-        await cb.message.answer("❌ Ошибка проверки подписки")
+        await cb.message.answer("❌ Ошибка проверки")
 
     await cb.answer()
 
@@ -53,7 +61,7 @@ async def check(cb: CallbackQuery):
 # ================= ENTER CODE =================
 @router.callback_query(F.data == "code")
 async def enter_code(cb: CallbackQuery):
-    await cb.message.answer("🔑 Введите 5-значный код:")
+    await cb.message.answer("🔑 Введите код:")
     await cb.answer()
 
 
@@ -82,11 +90,8 @@ async def check_code(msg: Message):
     elif content_type == "document":
         await msg.answer_document(document=content)
 
-    else:
-        await msg.answer("❌ Ошибка контента")
 
-
-# ================= ADMIN PANEL =================
+# ================= ADMIN =================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
 
@@ -95,10 +100,10 @@ async def admin(msg: Message):
 
     await msg.answer(
         "👑 АДМИНКА\n\n"
-        "/create_code - создать код\n"
-        "/delete_code 12345 - удалить код\n"
-        "/stats - статистика\n"
-        "/codes - список кодов"
+        "/create_code\n"
+        "/delete_code 12345\n"
+        "/stats\n"
+        "/codes"
     )
 
 
@@ -110,13 +115,9 @@ async def create_code(msg: Message):
         return
 
     code = str(random.randint(0, 99999)).zfill(5)
-
     pending_code[msg.from_user.id] = code
 
-    await msg.answer(
-        f"🎲 Код создан: {code}\n\n"
-        "Отправь контент (текст / фото / видео / файл)"
-    )
+    await msg.answer(f"🎲 Код: {code}\nОтправь контент")
 
 
 # ================= SAVE CONTENT =================
@@ -124,41 +125,27 @@ async def create_code(msg: Message):
 async def save_content(msg: Message):
 
     code = pending_code.get(msg.from_user.id)
-
     if not code:
         return
 
-    content_type = None
-    content = None
-
     if msg.photo:
-        content_type = "photo"
-        content = msg.photo[-1].file_id
+        await add_code(code, "photo", msg.photo[-1].file_id)
 
     elif msg.video:
-        content_type = "video"
-        content = msg.video.file_id
+        await add_code(code, "video", msg.video.file_id)
 
     elif msg.document:
-        content_type = "document"
-        content = msg.document.file_id
+        await add_code(code, "document", msg.document.file_id)
 
     elif msg.text:
-        content_type = "text"
-        content = msg.text
-
-    else:
-        await msg.answer("❌ Неподдерживаемый формат")
-        return
-
-    await add_code(code, content_type, content)
+        await add_code(code, "text", msg.text)
 
     pending_code.pop(msg.from_user.id)
 
-    await msg.answer(f"✅ Код {code} сохранён!")
+    await msg.answer(f"✅ Код {code} сохранён")
 
 
-# ================= DELETE CODE (С СТАТУСОМ) =================
+# ================= DELETE CODE (FIXED) =================
 @router.message(F.text.startswith("/delete_code"))
 async def delete_code(msg: Message):
 
@@ -173,17 +160,15 @@ async def delete_code(msg: Message):
 
     code = parts[1]
 
-    async with aiosqlite.connect("db.sqlite3") as db:
-        cur = await db.execute("DELETE FROM codes WHERE code=?", (code,))
-        await db.commit()
+    result = await delete_code_db(code)
 
-        if cur.rowcount == 0:
-            await msg.answer(f"❌ Код {code} не найден")
-        else:
-            await msg.answer(f"🗑 Код {code} успешно удалён")
+    if result == 0:
+        await msg.answer("❌ Код не найден")
+    else:
+        await msg.answer(f"🗑 Код {code} удалён успешно")
 
 
-# ================= STATS =================
+# ================= STATS (FIXED) =================
 @router.message(F.text == "/stats")
 async def stats(msg: Message):
 
@@ -195,27 +180,27 @@ async def stats(msg: Message):
 
     await msg.answer(
         "📊 СТАТИСТИКА\n\n"
-        f"👤 Пользователей: {users}\n"
-        f"🔑 Кодов: {codes}"
+        f"👤 Users: {users}\n"
+        f"🔑 Codes: {codes}"
     )
 
 
-# ================= CODES LIST =================
+# ================= ALL CODES =================
 @router.message(F.text == "/codes")
-async def codes_list(msg: Message):
+async def codes(msg: Message):
 
     if msg.from_user.id != ADMIN_ID:
         return
 
-    codes = await get_all_codes()
+    data = await get_all_codes()
 
-    if not codes:
+    if not data:
         await msg.answer("📭 Кодов нет")
         return
 
-    text = "📦 ВСЕ КОДЫ:\n\n"
+    text = "📦 АКТИВНЫЕ КОДЫ:\n\n"
 
-    for c in codes:
+    for c in data:
         text += f"🔑 {c[0]}\n"
 
     await msg.answer(text)
