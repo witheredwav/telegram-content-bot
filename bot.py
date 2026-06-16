@@ -70,13 +70,14 @@ def get_stats_text() -> str:
     return "\n".join(lines)
 
 def next_free_code() -> str | None:
+    import random
     db = load_db()
     existing = set(db["codes"].keys())
-    for i in range(1, 100000):
-        code = f"{i:05d}"
-        if code not in existing:
-            return code
-    return None
+    all_codes = [f"{i:05d}" for i in range(1, 100000)]
+    free = [c for c in all_codes if c not in existing]
+    if not free:
+        return None
+    return random.choice(free)
 
 # ─── FSM ──────────────────────────────────────────────────────────────────────
 
