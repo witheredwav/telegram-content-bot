@@ -157,3 +157,22 @@ async def check_code(msg: Message):
 
     else:
         await msg.answer("❌ Ошибка: неизвестный тип контента")
+
+
+from db import users_count, codes_count
+
+
+@router.message(F.text == "/stats")
+async def stats(msg: Message):
+
+    if msg.from_user.id != ADMIN_ID:
+        return
+
+    users = await users_count()
+    codes = await codes_count()
+
+    await msg.answer(
+        "📊 СТАТИСТИКА\n\n"
+        f"👤 Пользователей: {users}\n"
+        f"🔑 Кодов: {codes}"
+    )
