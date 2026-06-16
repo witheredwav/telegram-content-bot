@@ -2,10 +2,10 @@ import random
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
-from aiogram.fsm.context import FSMContext
+from aiogram.enums import ChatMemberStatus
 
-from config import ADMIN_ID
-from db import add_code, users_count
+from config import CHANNEL_USERNAME, ADMIN_ID
+from db import add_code
 from keyboards import start_kb, menu_kb
 
 router = Router()
@@ -13,51 +13,62 @@ router = Router()
 pending_code = {}
 
 
-# /start
+# =====================
+# START
+# =====================
 @router.message(F.text == "/start")
 async def start(msg: Message):
-
     await msg.answer(
         "👋 Привет!\n\nПодпишись на канал",
         reply_markup=start_kb()
     )
 
 
-# CHECK SUB (заглушка, если у тебя есть — оставь свою)
+# =====================
+# CHECK SUBSCRIPTION
+# =====================
 @router.callback_query(F.data == "check")
-async def check(cb: CallbackQuery):
+async def check_sub(cb: CallbackQuery):
 
-    await cb.message.answer("✅ Проверка (сюда подключим подписку позже)")
+    try:
+        member = await cb.bot.get_chat_member(
+            chat_id=f"@{CHANNEL_USERNAME}",
+            user_id=cb.from_user.id
+        )
+
+        if member.status in [
+            ChatMemberStatus.MEMBER,
+            ChatMemberStatus.ADMINISTRATOR,
+            ChatMemberStatus.CREATOR
+        ]:
+            await cb.message.answer("✅ Подписка подтверждена", reply_markup=menu_kb())
+        else:
+            await cb.message.answer("❌ Вы не подписаны")
+
+    except Exception:
+        await cb.message.answer("❌ Ошибка проверки (проверь канал и админство бота)")
+
     await cb.answer()
 
 
-# MENU
-@router.callback_query(F.data == "code")
-async def code_menu(cb: CallbackQuery, state: FSMContext):
-
-    await state.set_state(None)
-    await cb.message.answer("🔑 Введите код:")
-    await cb.answer()
-
-
-# =========================
-# 👑 АДМИН ПАНЕЛЬ
-# =========================
-
+# =====================
+# ADMIN PANEL
+# =====================
 @router.message(F.text == "/admin")
-async def admin_panel(msg: Message):
+async def admin(msg: Message):
 
     if msg.from_user.id != ADMIN_ID:
         return
 
     await msg.answer(
         "👑 АДМИН ПАНЕЛЬ\n\n"
-        "/create_code — создать код\n"
-        "/stats — статистика"
+        "/create_code - создать код"
     )
 
 
-# СОЗДАНИЕ КОДА
+# =====================
+# CREATE CODE
+# =====================
 @router.message(F.text == "/create_code")
 async def create_code(msg: Message):
 
@@ -68,20 +79,14 @@ async def create_code(msg: Message):
 
     pending_code[msg.from_user.id] = code
 
-    await msg.answer(
-        f"🎲 Код создан: {code}\n\n"
-        "Теперь отправь:\n"
-        "- текст\n"
-        "- фото\n"
-        "- файл\n"
-        "- видео\n"
-        "- ссылку"
-    )
+    await msg.answer(f"🎲 Код: {code}\n\nОтправь контент")
 
 
-# ПОЛУЧЕНИЕ КОНТЕНТА ОТ АДМИНА
+# =====================
+# SAVE CONTENT
+# =====================
 @router.message()
-async def admin_content(msg: Message):
+async def save_content(msg: Message):
 
     if msg.from_user.id != ADMIN_ID:
         return
@@ -111,11 +116,11 @@ async def admin_content(msg: Message):
         content = msg.text
 
     else:
-        await msg.answer("❌ Неизвестный формат")
+        await msg.answer("❌ Неподдерживаемый формат")
         return
 
     await add_code(code, content_type, content)
 
     pending_code.pop(msg.from_user.id)
 
-    await msg.answer(f"✅ Код {code} сохранён!")
+    await msg.answer(f"✅ Код {code} сохранён")
