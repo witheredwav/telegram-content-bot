@@ -1,3 +1,4 @@
+import db
 import asyncio
 
 from aiogram import Bot
