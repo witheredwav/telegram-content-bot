@@ -22,7 +22,6 @@ async def init():
         await db.commit()
 
 
-# USERS
 async def add_user(tg_id):
     async with aiosqlite.connect(DB) as db:
         await db.execute("INSERT OR IGNORE INTO users VALUES (?)", (tg_id,))
@@ -35,7 +34,6 @@ async def users_count():
         return (await cur.fetchone())[0]
 
 
-# CODES
 async def add_code(code, type_, content):
     async with aiosqlite.connect(DB) as db:
         await db.execute(
