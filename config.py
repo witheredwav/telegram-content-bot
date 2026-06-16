@@ -1,7 +1,0 @@
-BOT_TOKEN = "8586166190:AAHXasvk5TD6Oo7nB4jCwYr1rQ2tVlWLxmw"
-
-ADMIN_ID = 793806918
-
-CHANNEL_USERNAME = "@witheredoff"
-
-EXAMPLES_CHANNEL = "https://t.me/witheredwav"
