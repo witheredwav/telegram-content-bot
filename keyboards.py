@@ -10,17 +10,23 @@ def start_kb():
 
 def menu_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📂 Примеры работ", url="https://t.me/YOUR_CHANNEL")],
+        [InlineKeyboardButton(text="📂 Работы", url="https://t.me/YOUR_CHANNEL")],
         [InlineKeyboardButton(text="👥 Рефералка", callback_data="ref")],
-        [InlineKeyboardButton(text="🔑 Ввести код", callback_data="code")]
+        [InlineKeyboardButton(text="🔑 Код", callback_data="code")]
     ])
 
 
 def admin_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Статистика", callback_data="stats")],
-        [InlineKeyboardButton(text="📦 Коды", callback_data="codes")],
-        [InlineKeyboardButton(text="🗑 Удалить код", callback_data="del")],
-        [InlineKeyboardButton(text="🎲 Создать код", callback_data="create")],
-        [InlineKeyboardButton(text="👥 Рефералы", callback_data="refs")]
+        [
+            InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
+            InlineKeyboardButton(text="📦 Коды", callback_data="admin_codes")
+        ],
+        [
+            InlineKeyboardButton(text="🎲 Создать код", callback_data="admin_create"),
+            InlineKeyboardButton(text="🗑 Удалить код", callback_data="admin_delete")
+        ],
+        [
+            InlineKeyboardButton(text="👥 Рефералы", callback_data="admin_refs")
+        ]
     ])
