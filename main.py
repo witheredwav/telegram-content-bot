@@ -9,24 +9,23 @@ from app.database.migrate import run_migrations
 from app.database.session import engine
 from app.database.redis import redis
 
-
-async def check_services():
-    async with engine.begin() as conn:
-        await conn.run_sync(lambda _: None)
-
-    await redis.ping()
+from app.handlers.start import router as start_router
 
 
 async def main():
 
     logger.info("Bot starting...")
 
-    # 🔥 ВАЖНО: авто-миграции
     run_migrations()
 
-    await check_services()
+    async with engine.begin() as conn:
+        await conn.run_sync(lambda _: None)
+
+    await redis.ping()
 
     dp = Dispatcher()
+
+    dp.include_router(start_router)
 
     logger.info("Bot started")
 
