@@ -7,7 +7,7 @@ from config import WORKS_LINK
 
 def start_keyboard():
 
-```
+
 return InlineKeyboardMarkup(
     inline_keyboard=[
         [
@@ -24,11 +24,11 @@ return InlineKeyboardMarkup(
         ]
     ]
 )
-```
+
 
 def user_keyboard():
 
-```
+
 return InlineKeyboardMarkup(
     inline_keyboard=[
         [
@@ -45,11 +45,11 @@ return InlineKeyboardMarkup(
         ]
     ]
 )
-```
+
 
 def admin_keyboard():
 
-```
+
 return InlineKeyboardMarkup(
     inline_keyboard=[
         [
@@ -66,5 +66,5 @@ return InlineKeyboardMarkup(
         ]
     ]
 )
-```
+
 
