@@ -1,17 +1,18 @@
 import sqlite3
 
-conn = sqlite3.connect("codes.db")
-cursor = conn.cursor()
+conn = sqlite3.connect("codes.db", check_same_thread=False)
+cur = conn.cursor()
 
-cursor.execute("""
+cur.execute("""
 CREATE TABLE IF NOT EXISTS codes (
     code TEXT PRIMARY KEY,
     type TEXT,
-    value TEXT
+    value TEXT,
+    used INTEGER DEFAULT 0
 )
 """)
 
-cursor.execute("""
+cur.execute("""
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY
 )
@@ -20,24 +21,29 @@ CREATE TABLE IF NOT EXISTS users (
 conn.commit()
 
 
-def add_code(code, type_, value):
-    cursor.execute(
-        "INSERT OR REPLACE INTO codes VALUES (?, ?, ?)",
+def add_user(user_id):
+    cur.execute("INSERT OR IGNORE INTO users VALUES (?)", (user_id,))
+    conn.commit()
+
+
+def user_count():
+    cur.execute("SELECT COUNT(*) FROM users")
+    return cur.fetchone()[0]
+
+
+def create_code(code, type_, value):
+    cur.execute(
+        "INSERT OR REPLACE INTO codes VALUES (?, ?, ?, 0)",
         (code, type_, value)
     )
     conn.commit()
 
 
 def get_code(code):
-    cursor.execute("SELECT type, value FROM codes WHERE code=?", (code,))
-    return cursor.fetchone()
+    cur.execute("SELECT type, value, used FROM codes WHERE code=?", (code,))
+    return cur.fetchone()
 
 
-def add_user(user_id):
-    cursor.execute("INSERT OR IGNORE INTO users VALUES (?)", (user_id,))
+def mark_used(code):
+    cur.execute("UPDATE codes SET used=1 WHERE code=?", (code,))
     conn.commit()
-
-
-def count_users():
-    cursor.execute("SELECT COUNT(*) FROM users")
-    return cursor.fetchone()[0]
