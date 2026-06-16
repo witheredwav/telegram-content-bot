@@ -7,22 +7,24 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.storage.memory import MemoryStorage
 
 
-# ======================
+# =====================
 # 🔐 НАСТРОЙКИ
-# ======================
+# =====================
 
 BOT_TOKEN = "8586166190:AAHOAcP29AYDThbBn5TN60ZeP7RQfhfeEe8"
 CHANNEL_ID = "@witheredoff"
 ADMIN_ID = 793806918
+
+EXAMPLES_CHANNEL = "@witheredwav"
 
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 
-# ======================
-# 📦 ДАННЫЕ
-# ======================
+# =====================
+# 📦 БАЗА
+# =====================
 
 def load_codes():
     try:
@@ -46,17 +48,17 @@ stats = {
 }
 
 
-# ======================
+# =====================
 # 🎲 КОД
-# ======================
+# =====================
 
 def generate_code():
     return str(random.randint(10000, 99999))
 
 
-# ======================
+# =====================
 # 🔐 ПОДПИСКА
-# ======================
+# =====================
 
 async def is_subscribed(user_id: int):
     try:
@@ -70,9 +72,9 @@ def is_admin(user_id: int):
     return user_id == ADMIN_ID
 
 
-# ======================
+# =====================
 # 📌 /start + КНОПКИ
-# ======================
+# =====================
 
 @dp.message(CommandStart())
 async def start(message: types.Message):
@@ -94,40 +96,36 @@ async def start(message: types.Message):
 
     kb = types.ReplyKeyboardMarkup(
         keyboard=[
-            [types.KeyboardButton(text="🔔 Подписаться")],
-            [types.KeyboardButton(text="✅ Проверить подписку")]
+            [types.KeyboardButton(text="🔑 Ввести код")],
+            [types.KeyboardButton(text="🎬 Примеры работ")],
         ],
         resize_keyboard=True
     )
 
-    await message.answer("👋 Подпишись на канал", reply_markup=kb)
+    await message.answer("👋 Выбери действие:", reply_markup=kb)
 
 
-# ======================
-# 🔔 ПОДПИСАТЬСЯ
-# ======================
+# =====================
+# 🎬 ПРИМЕРЫ РАБОТ
+# =====================
 
-@dp.message(F.text == "🔔 Подписаться")
-async def sub(message: types.Message):
-    await message.answer(f"👉 {CHANNEL_ID}")
-
-
-# ======================
-# ✅ ПРОВЕРКА ПОДПИСКИ
-# ======================
-
-@dp.message(F.text == "✅ Проверить подписку")
-async def check(message: types.Message):
-
-    if await is_subscribed(message.from_user.id):
-        await message.answer("✅ Ок! Теперь введи код")
-    else:
-        await message.answer("❌ Ты не подписан")
+@dp.message(F.text == "🎬 Примеры работ")
+async def examples(message: types.Message):
+    await message.answer(f"👉 Перейди сюда: {EXAMPLES_CHANNEL}")
 
 
-# ======================
-# 🎲 СОЗДАНИЕ КОДА
-# ======================
+# =====================
+# 🔑 ВВОД КОДА (ПРАВИЛЬНО)
+# =====================
+
+@dp.message(F.text == "🔑 Ввести код")
+async def ask_code(message: types.Message):
+    await message.answer("🔑 Введи код сообщением:")
+
+
+# =====================
+# 🎲 АДМИН - СОЗДАНИЕ КОДА
+# =====================
 
 @dp.message(F.text == "🎲 Новый код")
 async def new_code(message: types.Message):
@@ -141,15 +139,15 @@ async def new_code(message: types.Message):
     stats["created"] += 1
 
     await message.answer(
-        f"🎲 Код: {code}\n\n"
+        f"🎲 Код создан: {code}\n\n"
         "Отправь:\n"
         "📄 текст / 🔗 ссылку / 📁 файл"
     )
 
 
-# ======================
+# =====================
 # 📋 КОДЫ
-# ======================
+# =====================
 
 @dp.message(F.text == "📋 Коды")
 async def list_codes(message: types.Message):
@@ -157,16 +155,20 @@ async def list_codes(message: types.Message):
     if not is_admin(message.from_user.id):
         return
 
+    if not codes:
+        await message.answer("Пусто")
+        return
+
     text = "📦 Коды:\n\n"
     for k, v in codes.items():
         text += f"{k} → {v['type']}\n"
 
-    await message.answer(text or "Пусто")
+    await message.answer(text)
 
 
-# ======================
+# =====================
 # 📊 СТАТИСТИКА
-# ======================
+# =====================
 
 @dp.message(F.text == "📊 Статистика")
 async def stats_handler(message: types.Message):
@@ -176,18 +178,18 @@ async def stats_handler(message: types.Message):
 
     await message.answer(
         f"📊 Статистика:\n\n"
-        f"🆕 Код создано: {stats['created']}\n"
+        f"🆕 Кодов создано: {stats['created']}\n"
         f"📥 Использовано: {stats['used']}\n"
         f"👤 Пользователей: {len(stats['users'])}"
     )
 
 
-# ======================
-# 👑 АДМИН ЗАГРУЗКА (ФИКС)
-# ======================
+# =====================
+# 📥 АДМИН ЗАГРУЗКА
+# =====================
 
 @dp.message()
-async def admin_input(message: types.Message):
+async def admin_upload(message: types.Message):
 
     if message.from_user.id in pending:
 
@@ -220,20 +222,21 @@ async def admin_input(message: types.Message):
         return
 
 
-# ======================
-# 👤 ПОЛЬЗОВАТЕЛИ (ИСПРАВЛЕНО)
-# ======================
+# =====================
+# 👤 ПОЛЬЗОВАТЕЛЬ ВВОД КОДА (ФИКС 100%)
+# =====================
 
 @dp.message()
-async def user_handler(message: types.Message):
+async def user_codes(message: types.Message):
 
     if is_admin(message.from_user.id):
         return
 
     stats["users"].add(message.from_user.id)
 
+    # проверяем подписку
     if not await is_subscribed(message.from_user.id):
-        await message.answer("❌ Сначала подпишись")
+        await message.answer("❌ Сначала подпишись на канал")
         return
 
     code = message.text.strip()
@@ -246,7 +249,6 @@ async def user_handler(message: types.Message):
 
     stats["used"] += 1
 
-    # 🔥 ВЫДАЧА ССЫЛКИ/ТЕКСТА/ФАЙЛА
     if data["type"] == "text":
         await message.answer(data["value"])
 
