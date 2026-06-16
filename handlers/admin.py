@@ -19,7 +19,7 @@ pending_code = {}
 @router.message(F.text == "/admin")
 async def admin_panel(message: Message):
 
-```
+
 if message.from_user.id != ADMIN_ID:
     return await message.answer("❌ Нет доступа")
 
@@ -28,14 +28,14 @@ await message.answer(
     "/create_code - создать код\n"
     "/stats - статистика"
 )
-```
+
 
 # СТАТИСТИКА
 
 @router.message(F.text == "/stats")
 async def stats(message: Message):
 
-```
+
 if message.from_user.id != ADMIN_ID:
     return
 
@@ -49,14 +49,14 @@ await message.answer(
     f"🎫 Кодов: {codes}\n"
     f"📈 Действий: {actions}"
 )
-```
+
 
 # СОЗДАНИЕ КОДА
 
 @router.message(F.text == "/create_code")
 async def create_code(message: Message, state: FSMContext):
 
-```
+
 if message.from_user.id != ADMIN_ID:
     return
 
@@ -75,14 +75,14 @@ await message.answer(
     "🎥 видео\n"
     "🔗 ссылку"
 )
-```
+
 
 # ПОЛУЧЕНИЕ КОНТЕНТА ОТ АДМИНА
 
 @router.message(AdminStates.waiting_for_content)
 async def get_content(message: Message, state: FSMContext):
 
-```
+
 if message.from_user.id != ADMIN_ID:
     return
 
@@ -126,4 +126,4 @@ pending_code.pop(message.from_user.id)
 await state.clear()
 
 await message.answer(f"✅ Код {code} сохранён!")
-```
+
