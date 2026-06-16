@@ -47,14 +47,14 @@ async def check(cb: CallbackQuery):
     await cb.answer()
 
 
-# ================= ENTER CODE BUTTON =================
+# ================= ENTER CODE =================
 @router.callback_query(F.data == "code")
 async def enter_code(cb: CallbackQuery):
     await cb.message.answer("🔑 Введите 5-значный код:")
     await cb.answer()
 
 
-# ================= ADMIN PANEL =================
+# ================= ADMIN =================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
 
@@ -84,13 +84,9 @@ async def create_code(msg: Message):
     )
 
 
-# ================= SAVE CONTENT =================
-@router.message()
+# ================= SAVE CONTENT (ТОЛЬКО АДМИН) =================
+@router.message(F.from_user.id == ADMIN_ID)
 async def save_content(msg: Message):
-
-    # только админ может заливать контент
-    if msg.from_user.id != ADMIN_ID:
-        return
 
     code = pending_code.get(msg.from_user.id)
 
@@ -127,16 +123,13 @@ async def save_content(msg: Message):
     await msg.answer(f"✅ Код {code} сохранён!")
 
 
-# ================= CHECK USER CODE =================
-@router.message()
+# ================= CHECK CODE (ГЛАВНЫЙ ФИКС) =================
+@router.message(F.text.regexp(r"^\d{5}$"))
 async def check_code(msg: Message):
 
-    text = msg.text.strip()
+    code = msg.text.strip()
 
-    if not text.isdigit() or len(text) != 5:
-        return
-
-    data = await get_code(text)
+    data = await get_code(code)
 
     if not data:
         await msg.answer("❌ Неверный код")
