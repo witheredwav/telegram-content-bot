@@ -66,16 +66,12 @@ async def is_subscribed(user_id: int):
         return False
 
 
-# ======================
-# 👑 АДМИН
-# ======================
-
 def is_admin(user_id: int):
     return user_id == ADMIN_ID
 
 
 # ======================
-# 📌 /start (НОВАЯ СИСТЕМА КНОПОК)
+# 📌 /start + КНОПКИ
 # ======================
 
 @dp.message(CommandStart())
@@ -104,7 +100,7 @@ async def start(message: types.Message):
         resize_keyboard=True
     )
 
-    await message.answer("👋 Привет! Сначала подпишись на канал 👇", reply_markup=kb)
+    await message.answer("👋 Подпишись на канал", reply_markup=kb)
 
 
 # ======================
@@ -112,8 +108,8 @@ async def start(message: types.Message):
 # ======================
 
 @dp.message(F.text == "🔔 Подписаться")
-async def subscribe_btn(message: types.Message):
-    await message.answer(f"👉 Подпишись сюда: {CHANNEL_ID}")
+async def sub(message: types.Message):
+    await message.answer(f"👉 {CHANNEL_ID}")
 
 
 # ======================
@@ -121,12 +117,12 @@ async def subscribe_btn(message: types.Message):
 # ======================
 
 @dp.message(F.text == "✅ Проверить подписку")
-async def check_sub(message: types.Message):
+async def check(message: types.Message):
 
     if await is_subscribed(message.from_user.id):
-        await message.answer("✅ Подписка подтверждена!\nТеперь введи код 🔑")
+        await message.answer("✅ Ок! Теперь введи код")
     else:
-        await message.answer("❌ Ты ещё не подписан")
+        await message.answer("❌ Ты не подписан")
 
 
 # ======================
@@ -152,7 +148,7 @@ async def new_code(message: types.Message):
 
 
 # ======================
-# 📋 СПИСОК КОДОВ
+# 📋 КОДЫ
 # ======================
 
 @dp.message(F.text == "📋 Коды")
@@ -161,16 +157,11 @@ async def list_codes(message: types.Message):
     if not is_admin(message.from_user.id):
         return
 
-    if not codes:
-        await message.answer("Пусто")
-        return
-
     text = "📦 Коды:\n\n"
-
     for k, v in codes.items():
         text += f"{k} → {v['type']}\n"
 
-    await message.answer(text)
+    await message.answer(text or "Пусто")
 
 
 # ======================
@@ -185,14 +176,14 @@ async def stats_handler(message: types.Message):
 
     await message.answer(
         f"📊 Статистика:\n\n"
-        f"🆕 Кодов создано: {stats['created']}\n"
+        f"🆕 Код создано: {stats['created']}\n"
         f"📥 Использовано: {stats['used']}\n"
         f"👤 Пользователей: {len(stats['users'])}"
     )
 
 
 # ======================
-# 📥 АДМИН ОТПРАВКА ДАННЫХ
+# 👑 АДМИН ЗАГРУЗКА (ФИКС)
 # ======================
 
 @dp.message()
@@ -206,7 +197,7 @@ async def admin_input(message: types.Message):
             value = message.document.file_id
             type_ = "file"
         else:
-            text = message.text
+            text = message.text.strip()
 
             if text.startswith("http"):
                 type_ = "link"
@@ -230,7 +221,7 @@ async def admin_input(message: types.Message):
 
 
 # ======================
-# 👤 ПОЛЬЗОВАТЕЛИ (ПОЧИНЕНО)
+# 👤 ПОЛЬЗОВАТЕЛИ (ИСПРАВЛЕНО)
 # ======================
 
 @dp.message()
@@ -242,7 +233,7 @@ async def user_handler(message: types.Message):
     stats["users"].add(message.from_user.id)
 
     if not await is_subscribed(message.from_user.id):
-        await message.answer("❌ Сначала подпишись на канал")
+        await message.answer("❌ Сначала подпишись")
         return
 
     code = message.text.strip()
@@ -255,6 +246,7 @@ async def user_handler(message: types.Message):
 
     stats["used"] += 1
 
+    # 🔥 ВЫДАЧА ССЫЛКИ/ТЕКСТА/ФАЙЛА
     if data["type"] == "text":
         await message.answer(data["value"])
 
@@ -263,14 +255,3 @@ async def user_handler(message: types.Message):
 
     elif data["type"] == "file":
         await message.answer_document(data["value"])
-
-
-# ======================
-# 🚀 ЗАПУСК
-# ======================
-
-async def main():
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
