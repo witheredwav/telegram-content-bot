@@ -1,4 +1,6 @@
 import aiosqlite
+import random
+import string
 from config import DB_NAME
 
 
@@ -14,8 +16,7 @@ async def init_db():
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS codes (
-            code TEXT PRIMARY KEY,
-            content TEXT
+            code TEXT PRIMARY KEY
         )
         """)
 
@@ -24,21 +25,6 @@ async def init_db():
             user_id INTEGER PRIMARY KEY,
             ref_code TEXT,
             invites INTEGER DEFAULT 0
-        )
-        """)
-
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS stats (
-            key TEXT PRIMARY KEY,
-            value INTEGER
-        )
-        """)
-
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS pending_actions (
-            admin_id INTEGER,
-            action TEXT,
-            target_id INTEGER
         )
         """)
 
@@ -58,41 +44,11 @@ async def users_count():
         return (await cur.fetchone())[0]
 
 
-# ================= STATS =================
-async def add_stat(key):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("""
-        INSERT INTO stats(key,value)
-        VALUES (?,1)
-        ON CONFLICT(key) DO UPDATE SET value=value+1
-        """, (key,))
-        await db.commit()
-
-
-async def get_stat(key):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT value FROM stats WHERE key=?", (key,))
-        r = await cur.fetchone()
-        return r[0] if r else 0
-
-
 # ================= CODES =================
-async def add_code(code, content):
+async def add_code(code):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("INSERT OR REPLACE INTO codes VALUES (?,?)", (code, content))
+        await db.execute("INSERT OR IGNORE INTO codes VALUES (?)", (code,))
         await db.commit()
-
-
-async def get_code(code):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT * FROM codes WHERE code=?", (code,))
-        return await cur.fetchone()
-
-
-async def get_codes():
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT code FROM codes")
-        return await cur.fetchall()
 
 
 async def delete_code(code):
@@ -101,15 +57,50 @@ async def delete_code(code):
         await db.commit()
 
 
+async def get_codes():
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT code FROM codes")
+        return await cur.fetchall()
+
+
 # ================= REF =================
+async def get_ref(user_id):
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute(
+            "SELECT ref_code, invites FROM referrals WHERE user_id=?",
+            (user_id,)
+        )
+        return await cur.fetchone()
+
+
+async def create_ref(user_id):
+    code = ''.join(random.choices(string.ascii_letters + string.digits, k=9))
+
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO referrals VALUES (?,?,0)",
+            (user_id, code)
+        )
+        await db.commit()
+
+    return code
+
+
 async def set_ref(user_id, code):
     async with aiosqlite.connect(DB_NAME) as db:
 
-        cur = await db.execute("SELECT 1 FROM referrals WHERE user_id=?", (user_id,))
+        cur = await db.execute(
+            "SELECT 1 FROM referrals WHERE user_id=?",
+            (user_id,)
+        )
+
         if await cur.fetchone():
             return False
 
-        cur = await db.execute("SELECT user_id FROM referrals WHERE ref_code=?", (code,))
+        cur = await db.execute(
+            "SELECT user_id FROM referrals WHERE ref_code=?",
+            (code,)
+        )
         owner = await cur.fetchone()
 
         if owner and owner[0] == user_id:
@@ -127,63 +118,3 @@ async def set_ref(user_id, code):
 
         await db.commit()
         return True
-
-
-async def my_ref(user_id):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT ref_code, invites FROM referrals WHERE user_id=?", (user_id,))
-        return await cur.fetchone()
-
-
-async def add_invites(user_id, amount):
-    async with aiosqlite.connect(DB_NAME) as db:
-
-        cur = await db.execute("SELECT invites FROM referrals WHERE user_id=?", (user_id,))
-        row = await cur.fetchone()
-
-        if not row:
-            await db.execute(
-                "INSERT INTO referrals VALUES (?,?,?)",
-                (user_id, "ADMIN", amount)
-            )
-        else:
-            await db.execute(
-                "UPDATE referrals SET invites = invites + ? WHERE user_id=?",
-                (amount, user_id)
-            )
-
-        await db.commit()
-
-
-async def remove_invites(user_id, amount):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("""
-        UPDATE referrals 
-        SET invites = MAX(invites - ?, 0)
-        WHERE user_id=?
-        """, (amount, user_id))
-        await db.commit()
-
-
-# ================= ADMIN ACTIONS =================
-async def set_pending(admin_id, action, target_id=None):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("""
-        INSERT OR REPLACE INTO pending_actions VALUES (?,?,?)
-        """, (admin_id, action, target_id))
-        await db.commit()
-
-
-async def get_pending(admin_id):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute(
-            "SELECT action, target_id FROM pending_actions WHERE admin_id=?",
-            (admin_id,)
-        )
-        return await cur.fetchone()
-
-
-async def clear_pending(admin_id):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("DELETE FROM pending_actions WHERE admin_id=?", (admin_id,))
-        await db.commit()
