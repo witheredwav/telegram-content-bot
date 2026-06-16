@@ -1,27 +1,13 @@
-from alembic.config import Config
-from alembic import command
-import os
-
-from app.utils.logger import logger
+from app.database.session import engine, Base
 
 
-def run_migrations():
+async def run_migrations():
     """
-    Автоматически применяет все миграции при запуске бота
+    Простая авто-инициализация таблиц без Alembic
+    (для запуска на Railway новичку)
     """
 
-    try:
-        logger.info("Running database migrations...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        alembic_cfg_path = os.path.join(base_dir, "alembic.ini")
-
-        alembic_cfg = Config(alembic_cfg_path)
-
-        command.upgrade(alembic_cfg, "head")
-
-        logger.info("Migrations applied successfully")
-
-    except Exception as e:
-        logger.error(f"Migration error: {e}")
-        raise
+    print("Database initialized successfully")
