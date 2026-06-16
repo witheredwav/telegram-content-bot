@@ -14,7 +14,6 @@ async def init_db():
         await db.execute("""
         CREATE TABLE IF NOT EXISTS codes (
             code TEXT PRIMARY KEY,
-            type TEXT,
             content TEXT
         )
         """)
@@ -41,6 +40,13 @@ async def init_db():
         )
         """)
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS ref_logs (
+            user_id INTEGER PRIMARY KEY,
+            code TEXT
+        )
+        """)
+
         await db.commit()
 
 
@@ -58,10 +64,9 @@ async def users_count():
 
 
 # CODES
-async def add_code(code, type_, content):
+async def add_code(code, content):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("INSERT OR REPLACE INTO codes VALUES (?,?,?)",
-                         (code, type_, content))
+        await db.execute("INSERT OR REPLACE INTO codes VALUES (?,?)", (code, content))
         await db.commit()
 
 
@@ -71,13 +76,7 @@ async def get_code(code):
         return await cur.fetchone()
 
 
-async def get_all_codes():
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT code FROM codes")
-        return await cur.fetchall()
-
-
-async def delete_code_db(code):
+async def delete_code(code):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("DELETE FROM codes WHERE code=?", (code,))
         await db.commit()
@@ -109,10 +108,17 @@ async def create_ref(user_id, code):
         await db.commit()
 
 
-async def get_ref_by_user(user_id):
+async def get_ref(user_id):
     async with aiosqlite.connect(DB_NAME) as db:
         cur = await db.execute("SELECT code, invites FROM referrals WHERE user_id=?", (user_id,))
         return await cur.fetchone()
+
+
+async def get_ref_owner(code):
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT user_id FROM referrals WHERE code=?", (code,))
+        row = await cur.fetchone()
+        return row[0] if row else None
 
 
 async def add_invite(code):
@@ -137,4 +143,17 @@ async def get_pending_ref(user_id):
 async def clear_pending_ref(user_id):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("DELETE FROM pending_refs WHERE user_id=?", (user_id,))
+        await db.commit()
+
+
+# ANTI FRAUD
+async def ref_exists(user_id):
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT 1 FROM ref_logs WHERE user_id=?", (user_id,))
+        return await cur.fetchone()
+
+
+async def save_ref_log(user_id, code):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("INSERT OR REPLACE INTO ref_logs VALUES (?,?)", (user_id, code))
         await db.commit()
