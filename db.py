@@ -53,10 +53,7 @@ async def add_code(code, type_, content):
 
 async def get_code(code):
     async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute(
-            "SELECT * FROM codes WHERE code=?",
-            (code,)
-        )
+        cur = await db.execute("SELECT * FROM codes WHERE code=?", (code,))
         return await cur.fetchone()
 
 
@@ -87,8 +84,5 @@ async def add_stat(action):
 
 async def get_stat(action):
     async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute(
-            "SELECT COUNT(*) FROM stats WHERE action=?",
-            (action,)
-        )
+        cur = await db.execute("SELECT COUNT(*) FROM stats WHERE action=?", (action,))
         return (await cur.fetchone())[0]
