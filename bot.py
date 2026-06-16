@@ -8,6 +8,8 @@ from database import create_tables
 
 from handlers.start import router as start_router
 
+from handlers.subscription import router as sub_router
+
 bot = Bot(token=BOT_TOKEN)
 
 dp = Dispatcher()
@@ -21,6 +23,7 @@ async def main():
 await on_startup()
 
 dp.include_router(start_router)
+dp.include_router(sub_router)
 
 await dp.start_polling(bot)
 
