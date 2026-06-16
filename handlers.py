@@ -135,20 +135,25 @@ async def check_code(msg: Message):
         await msg.answer("❌ Неверный код")
         return
 
+    code_db = data[0]
     content_type = data[1]
     content = data[2]
 
+    # ================= TEXT =================
     if content_type == "text":
         await msg.answer(content)
 
+    # ================= PHOTO =================
     elif content_type == "photo":
-        await msg.answer_photo(content)
+        await msg.answer_photo(photo=content)
 
+    # ================= VIDEO =================
     elif content_type == "video":
-        await msg.answer_video(content)
+        await msg.answer_video(video=content)
 
+    # ================= DOCUMENT =================
     elif content_type == "document":
-        await msg.answer_document(content)
+        await msg.answer_document(document=content)
 
     else:
-        await msg.answer("❌ Ошибка контента")
+        await msg.answer("❌ Ошибка: неизвестный тип контента")
