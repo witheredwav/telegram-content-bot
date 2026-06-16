@@ -1,7 +1,11 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    SettingsConfigDict
+)
 
 
 class Settings(BaseSettings):
+
     BOT_TOKEN: str
 
     DATABASE_URL: str
@@ -11,8 +15,10 @@ class Settings(BaseSettings):
     ADMIN_IDS: str
 
     CHANNEL_ID: int
+    CHANNEL_USERNAME: str
 
     WORKS_CHANNEL_ID: int
+    WORKS_CHANNEL_USERNAME: str
 
     model_config = SettingsConfigDict(
         env_file=".env",
