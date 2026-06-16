@@ -61,16 +61,22 @@ async def get_code(code):
         return await cur.fetchone()
 
 
-async def delete_code_db(code):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("DELETE FROM codes WHERE code=?", (code,))
-        await db.commit()
-
-
 async def get_all_codes():
     async with aiosqlite.connect(DB_NAME) as db:
         cur = await db.execute("SELECT code FROM codes")
         return await cur.fetchall()
+
+
+async def get_all_codes_full():
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT code, content FROM codes")
+        return await cur.fetchall()
+
+
+async def delete_code_db(code):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("DELETE FROM codes WHERE code=?", (code,))
+        await db.commit()
 
 
 async def codes_count():
@@ -90,3 +96,16 @@ async def get_stat(action):
     async with aiosqlite.connect(DB_NAME) as db:
         cur = await db.execute("SELECT COUNT(*) FROM stats WHERE action=?", (action,))
         return (await cur.fetchone())[0]
+
+
+# REFERRALS
+async def get_all_refs():
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT user_id, code, invites FROM referrals")
+        return await cur.fetchall()
+
+
+async def reset_ref(user_id):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("UPDATE referrals SET invites=0 WHERE user_id=?", (user_id,))
+        await db.commit()
