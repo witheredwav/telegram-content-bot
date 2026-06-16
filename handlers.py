@@ -12,6 +12,8 @@ from keyboards import start_kb, menu_kb, admin_kb
 router = Router()
 
 pending = {}
+pending_delete = {}
+pending_ref_delete = {}
 
 
 # ================= START =================
@@ -66,7 +68,7 @@ async def enter_code(msg: Message):
     await msg.answer(f"📦 Контент:\n\n{data[1]}")
 
 
-# ================= ADMIN PANEL =================
+# ================= ADMIN =================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
     if msg.from_user.id != ADMIN_ID:
@@ -96,7 +98,7 @@ code: {await get_stat("code") or 0}
     await cb.message.answer(text.strip())
 
 
-# ================= CODES LIST (BUTTONS) =================
+# ================= CODES LIST =================
 @router.callback_query(F.data == "admin_codes")
 async def codes(cb: CallbackQuery):
 
@@ -122,15 +124,43 @@ async def codes(cb: CallbackQuery):
     )
 
 
-# ================= DELETE CODE =================
+# ================= DELETE CODE CONFIRM =================
 @router.callback_query(F.data.startswith("del_code:"))
-async def del_code(cb: CallbackQuery):
+async def ask_delete(cb: CallbackQuery):
 
     code = cb.data.split(":")[1]
+    pending_delete[cb.from_user.id] = code
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Удалить", callback_data="confirm_del"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_del")
+        ]
+    ])
+
+    await cb.message.answer(f"⚠️ Удалить код {code}?", reply_markup=kb)
+
+
+@router.callback_query(F.data == "confirm_del")
+async def confirm_delete(cb: CallbackQuery):
+
+    code = pending_delete.get(cb.from_user.id)
+
+    if not code:
+        await cb.message.answer("❌ Нет кода")
+        return
 
     await delete_code_db(code)
+    pending_delete.pop(cb.from_user.id, None)
 
     await cb.message.answer(f"🗑 Код {code} удалён")
+
+
+@router.callback_query(F.data == "cancel_del")
+async def cancel_delete(cb: CallbackQuery):
+
+    pending_delete.pop(cb.from_user.id, None)
+    await cb.message.answer("❌ Отменено")
 
 
 # ================= CREATE CODE =================
@@ -184,40 +214,42 @@ async def refs(cb: CallbackQuery):
     )
 
 
-@router.callback_query(F.data.startswith("ref_open:"))
-async def ref_open(cb: CallbackQuery):
+@router.callback_query(F.data.startswith("ref_del:"))
+async def ref_delete(cb: CallbackQuery):
 
     user_id = int(cb.data.split(":")[1])
+    pending_ref_delete[cb.from_user.id] = user_id
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🔄 Сброс", callback_data=f"ref_reset:{user_id}")
-        ],
-        [
-            InlineKeyboardButton(text="🗑 Удалить", callback_data=f"ref_del:{user_id}")
+            InlineKeyboardButton(text="✅ Удалить", callback_data="confirm_ref_del"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_ref_del")
         ]
     ])
 
-    await cb.message.answer(f"👤 USER {user_id}", reply_markup=kb)
+    await cb.message.answer(
+        f"⚠️ Удалить реферала {user_id}?",
+        reply_markup=kb
+    )
 
 
-@router.callback_query(F.data.startswith("ref_reset:"))
-async def ref_reset(cb: CallbackQuery):
+@router.callback_query(F.data == "confirm_ref_del")
+async def confirm_ref_delete(cb: CallbackQuery):
 
-    user_id = int(cb.data.split(":")[1])
+    user_id = pending_ref_delete.get(cb.from_user.id)
 
-    await reset_ref(user_id)
+    if not user_id:
+        await cb.message.answer("❌ Нет данных")
+        return
 
-    await cb.message.answer("🔄 Сброшено")
-
-
-@router.callback_query(F.data.startswith("ref_del:"))
-async def ref_del(cb: CallbackQuery):
-
-    user_id = int(cb.data.split(":")[1])
-
-    async with aiosqlite.connect("db.sqlite3") as db:
-        await db.execute("DELETE FROM referrals WHERE user_id=?", (user_id,))
-        await db.commit()
+    await delete_ref(user_id)
+    pending_ref_delete.pop(cb.from_user.id, None)
 
     await cb.message.answer("🗑 Удалено")
+
+
+@router.callback_query(F.data == "cancel_ref_del")
+async def cancel_ref_delete(cb: CallbackQuery):
+
+    pending_ref_delete.pop(cb.from_user.id, None)
+    await cb.message.answer("❌ Отменено")
