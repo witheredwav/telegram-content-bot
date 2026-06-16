@@ -1,18 +1,18 @@
-import aiosqlite
+import time
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.enums import ChatMemberStatus
 
 from config import ADMIN_ID, CHANNEL_USERNAME
 from db import *
+from keyboards import start_kb, admin_kb
 
 router = Router()
 
 pending = {}
-pending_delete = {}
 pending_ref_state = {}
+last_action = {}
 
 
 # ================= START =================
@@ -22,7 +22,10 @@ async def start(msg: Message):
     await add_user(msg.from_user.id)
     await add_event(msg.from_user.id, "start")
 
-    await msg.answer("👋 Добро пожаловать")
+    await msg.answer(
+        "👋 Добро пожаловать в систему\n\n👇 Выберите действие:",
+        reply_markup=start_kb()
+    )
 
 
 # ================= CHECK SUB =================
@@ -45,11 +48,16 @@ async def check(cb: CallbackQuery):
     await cb.message.answer("✅ Доступ открыт")
 
 
+# ================= PORTFOLIO =================
+@router.callback_query(F.data == "portfolio")
+async def portfolio(cb: CallbackQuery):
+    await add_event(cb.from_user.id, "portfolio")
+    await cb.message.answer("📂 Примеры работ...")
+
+
 # ================= CODE INPUT =================
 @router.message(F.text.regexp(r"^\d{5}$"))
 async def code_input(msg: Message):
-
-    await add_event(msg.from_user.id, f"code:{msg.text}")
 
     data = await get_code(msg.text)
 
@@ -57,26 +65,33 @@ async def code_input(msg: Message):
         await msg.answer("❌ Неверный код")
         return
 
-    await msg.answer(f"📦 Контент:\n{data[1]}")
+    await msg.answer(f"📦 Контент:\n\n{data[1]}")
 
 
 # ================= REF BUTTON =================
 @router.callback_query(F.data == "ref")
 async def ref(cb: CallbackQuery):
 
-    await add_event(cb.from_user.id, "ref_open")
-
     pending_ref_state[cb.from_user.id] = True
 
-    await cb.message.answer("👥 Введите реф-код:")
+    await cb.message.answer("👥 Введите реферальный код:")
 
 
-# ================= REF INPUT =================
+# ================= REF INPUT + ANTI SPAM =================
 @router.message()
-async def any_message(msg: Message):
+async def all_messages(msg: Message):
 
-    # ================= REF FLOW =================
+    # ================= REF SYSTEM =================
     if pending_ref_state.get(msg.from_user.id):
+
+        now = time.time()
+
+        if msg.from_user.id in last_action:
+            if now - last_action[msg.from_user.id] < 3:
+                await msg.answer("⛔ Слишком быстро")
+                return
+
+        last_action[msg.from_user.id] = now
 
         code = msg.text.strip()
 
@@ -89,20 +104,17 @@ async def any_message(msg: Message):
 
         percent = await update_ref_level(msg.from_user.id)
 
-        await msg.answer(
-            f"🎉 Реферал засчитан\n💰 Скидка: {percent}%"
-        )
+        await msg.answer(f"🎉 Реферал засчитан\n💰 Скидка: {percent}%")
 
         pending_ref_state.pop(msg.from_user.id, None)
         return
 
 
-    # ================= ADMIN ADD CODES =================
+    # ================= ADMIN REF ADD =================
     if msg.from_user.id in pending:
 
         data = pending[msg.from_user.id]
 
-        # STEP 1: USER ID
         if data == "wait_user":
             pending[msg.from_user.id] = {
                 "step": "wait_amount",
@@ -112,7 +124,6 @@ async def any_message(msg: Message):
             await msg.answer("➕ Сколько рефералов выдать?")
             return
 
-        # STEP 2: AMOUNT
         if isinstance(data, dict) and data.get("step") == "wait_amount":
 
             user_id = data["user_id"]
@@ -140,26 +151,18 @@ async def admin(msg: Message):
     if msg.from_user.id != ADMIN_ID:
         return
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Статистика", callback_data="stats")],
-        [InlineKeyboardButton(text="➕ Выдать рефералы", callback_data="admin_add_refs")]
-    ])
-
-    await msg.answer("👑 ADMIN PANEL", reply_markup=kb)
+    await msg.answer("👑 ADMIN PANEL", reply_markup=admin_kb())
 
 
-# ================= ADMIN STATS =================
+# ================= STATS =================
 @router.callback_query(F.data == "stats")
 async def stats(cb: CallbackQuery):
 
-    text = f"""
-📊 STATISTICS
-
-👤 Users: {await users_count()}
-📦 Codes: {await codes_count()}
-"""
-
-    await cb.message.answer(text)
+    await cb.message.answer(
+        f"📊 STATISTICS\n\n"
+        f"👤 Users: {await users_count()}\n"
+        f"📦 Codes: {await codes_count()}"
+    )
 
 
 # ================= ADMIN ADD REF =================
@@ -169,14 +172,3 @@ async def admin_add_refs(cb: CallbackQuery):
     pending[cb.from_user.id] = "wait_user"
 
     await cb.message.answer("👤 Введите ID пользователя:")
-
-
-# ================= DELETE CODE =================
-@router.callback_query(F.data.startswith("del_code:"))
-async def delete_code(cb: CallbackQuery):
-
-    code = cb.data.split(":")[1]
-
-    await delete_code_db(code)
-
-    await cb.message.answer(f"🗑 Код {code} удалён")
