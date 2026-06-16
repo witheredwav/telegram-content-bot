@@ -1,8 +1,8 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
 
-from app.keyboards.admin_menu import admin_menu_keyboard
 from app.services.admin_service import AdminService
+from app.keyboards.admin_dashboard import admin_dashboard_keyboard
 
 router = Router()
 
@@ -17,8 +17,8 @@ async def admin_menu(callback: CallbackQuery):
         return
 
     await callback.message.answer(
-        "🛠 Админ-панель:",
-        reply_markup=admin_menu_keyboard()
+        "🛠 <b>Добро пожаловать в админ-панель</b>",
+        reply_markup=admin_dashboard_keyboard()
     )
 
     await callback.answer()
