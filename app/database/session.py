@@ -1,18 +1,14 @@
-from typing import Optional
-from pydantic_settings import BaseSettings
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
+from app.utils.config import settings
 
-class Settings(BaseSettings):
-    BOT_TOKEN: str
-    DATABASE_URL: str
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+)
 
-    REDIS_URL: Optional[str] = None
-
-    CHANNEL_ID: int
-    CHANNEL_USERNAME: str
-    WORKS_CHANNEL_ID: int
-    WORKS_CHANNEL_USERNAME: str
-    ADMIN_IDS: str
-
-
-settings = Settings()
+async_session = async_sessionmaker(
+    bind=engine,
+    expire_on_commit=False,
+)
