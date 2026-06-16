@@ -13,9 +13,9 @@ router = Router()
 pending_code = {}
 
 
-# =====================
+# =========================
 # START
-# =====================
+# =========================
 @router.message(F.text == "/start")
 async def start(msg: Message):
     await msg.answer(
@@ -24,16 +24,16 @@ async def start(msg: Message):
     )
 
 
-# =====================
+# =========================
 # CHECK SUBSCRIPTION
-# =====================
+# =========================
 @router.callback_query(F.data == "check")
-async def check_sub(cb: CallbackQuery):
+async def check(cb: CallbackQuery):
 
     try:
         member = await cb.bot.get_chat_member(
-            chat_id=f"@{CHANNEL_USERNAME}",
-            user_id=cb.from_user.id
+            f"@{CHANNEL_USERNAME}",
+            cb.from_user.id
         )
 
         if member.status in [
@@ -41,19 +41,32 @@ async def check_sub(cb: CallbackQuery):
             ChatMemberStatus.ADMINISTRATOR,
             ChatMemberStatus.CREATOR
         ]:
-            await cb.message.answer("✅ Подписка подтверждена", reply_markup=menu_kb())
+            await cb.message.answer(
+                "✅ Подписка подтверждена",
+                reply_markup=menu_kb()
+            )
         else:
             await cb.message.answer("❌ Вы не подписаны")
 
     except Exception:
-        await cb.message.answer("❌ Ошибка проверки (проверь канал и админство бота)")
+        await cb.message.answer("❌ Ошибка проверки подписки")
 
     await cb.answer()
 
 
-# =====================
+# =========================
+# MENU BUTTON "ВВЕСТИ КОД"
+# =========================
+@router.callback_query(F.data == "code")
+async def enter_code(cb: CallbackQuery):
+
+    await cb.message.answer("🔑 Введите код:")
+    await cb.answer()
+
+
+# =========================
 # ADMIN PANEL
-# =====================
+# =========================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
 
@@ -61,14 +74,14 @@ async def admin(msg: Message):
         return
 
     await msg.answer(
-        "👑 АДМИН ПАНЕЛЬ\n\n"
+        "👑 АДМИНКА\n\n"
         "/create_code - создать код"
     )
 
 
-# =====================
+# =========================
 # CREATE CODE
-# =====================
+# =========================
 @router.message(F.text == "/create_code")
 async def create_code(msg: Message):
 
@@ -79,12 +92,15 @@ async def create_code(msg: Message):
 
     pending_code[msg.from_user.id] = code
 
-    await msg.answer(f"🎲 Код: {code}\n\nОтправь контент")
+    await msg.answer(
+        f"🎲 Код создан: {code}\n\n"
+        "Отправь контент (текст / фото / видео / файл)"
+    )
 
 
-# =====================
+# =========================
 # SAVE CONTENT
-# =====================
+# =========================
 @router.message()
 async def save_content(msg: Message):
 
@@ -116,7 +132,7 @@ async def save_content(msg: Message):
         content = msg.text
 
     else:
-        await msg.answer("❌ Неподдерживаемый формат")
+        await msg.answer("❌ Неизвестный формат")
         return
 
     await add_code(code, content_type, content)
