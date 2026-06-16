@@ -48,3 +48,39 @@ def main_kb():
             )
         ]
     ])
+
+
+# ================= ADMIN PANEL =================
+def admin_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="➕ Создать код",
+                callback_data="admin_create_code"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📦 Список кодов",
+                callback_data="admin_codes"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="👥 Выдать рефералы",
+                callback_data="admin_add_refs"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="👥 Забрать рефералы",
+                callback_data="admin_remove_refs"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📊 Статистика",
+                callback_data="admin_stats"
+            )
+        ]
+    ])
