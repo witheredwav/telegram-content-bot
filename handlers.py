@@ -1,5 +1,3 @@
-print("HANDLERS LOADED")
-
 import random
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -29,7 +27,7 @@ async def start(msg: Message):
     await add_user(msg.from_user.id)
 
     await msg.answer(
-        "👋 Привет!\n\nПодпишись на канал 👇",
+        "👋 Привет!\nПодпишись на канал 👇",
         reply_markup=start_kb()
     )
 
@@ -59,7 +57,7 @@ async def check(cb: CallbackQuery):
     await cb.answer()
 
 
-# ================= OPEN CODE INPUT =================
+# ================= CODE BUTTON =================
 @router.callback_query(F.data == "code")
 async def enter_code(cb: CallbackQuery):
     await cb.message.answer("🔑 Введите 5-значный код:")
@@ -81,18 +79,15 @@ async def check_code(msg: Message):
 
     if t == "text":
         await msg.answer(c)
-
     elif t == "photo":
         await msg.answer_photo(c)
-
     elif t == "video":
         await msg.answer_video(c)
-
     elif t == "document":
         await msg.answer_document(c)
 
 
-# ================= ADMIN PANEL =================
+# ================= ADMIN =================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
 
@@ -100,7 +95,6 @@ async def admin(msg: Message):
         return
 
     await msg.answer(
-        "👑 АДМИНКА\n\n"
         "/create_code\n"
         "/delete_code 12345\n"
         "/stats\n"
@@ -118,10 +112,10 @@ async def create(msg: Message):
     code = str(random.randint(0, 99999)).zfill(5)
     pending[msg.from_user.id] = code
 
-    await msg.answer(f"🎲 Код: {code}\n\nОтправь контент")
+    await msg.answer(f"🎲 Код: {code}\nОтправь контент")
 
 
-# ================= SAVE CONTENT (SAFE) =================
+# ================= SAVE CONTENT (ВАЖНО БЕЗ ЛОВУШЕК) =================
 @router.message()
 async def save(msg: Message):
 
@@ -134,19 +128,16 @@ async def save(msg: Message):
 
     if msg.photo:
         await add_code(code, "photo", msg.photo[-1].file_id)
-
     elif msg.video:
         await add_code(code, "video", msg.video.file_id)
-
     elif msg.document:
         await add_code(code, "document", msg.document.file_id)
-
     elif msg.text and not msg.text.startswith("/"):
         await add_code(code, "text", msg.text)
 
     pending.pop(msg.from_user.id, None)
 
-    await msg.answer("✅ Код сохранён")
+    await msg.answer("✅ Сохранено")
 
 
 # ================= DELETE CODE =================
@@ -162,10 +153,8 @@ async def delete(msg: Message):
         await msg.answer("❌ /delete_code 12345")
         return
 
-    code = parts[1]
-
-    await delete_code_db(code)
-    await msg.answer("🗑 Удалено (если существовал)")
+    await delete_code_db(parts[1])
+    await msg.answer("🗑 удалено")
 
 
 # ================= STATS =================
@@ -191,11 +180,11 @@ async def codes(msg: Message):
     data = await get_all_codes()
 
     if not data:
-        await msg.answer("📭 Нет кодов")
+        await msg.answer("нет кодов")
         return
 
-    text = "📦 КОДЫ:\n\n"
+    text = "📦 Коды:\n\n"
     for c in data:
-        text += f"{c[0]}\n"
+        text += c[0] + "\n"
 
     await msg.answer(text)
