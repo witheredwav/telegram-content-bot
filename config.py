@@ -1,9 +1,4 @@
 import os
 
-TOKEN = os.getenv("TOKEN")
-
-CHANNEL_ID = "@witheredoff"
-
-ADMINS = [
-    793806918
-]
+BOT_TOKEN = os.getenv("TOKEN")
+CHANNEL_ID = os.getenv("@witheredoff")  # например: @mychannel
