@@ -43,12 +43,14 @@ CREATE TABLE IF NOT EXISTS codes (
 
 conn.commit()
 
+# ---------------- STATE ----------------
+user_state = {}
 
+# ---------------- STATS ----------------
 def stat(key: str):
     cur.execute("INSERT OR IGNORE INTO stats(key, count) VALUES(?, 0)", (key,))
     cur.execute("UPDATE stats SET count = count + 1 WHERE key = ?", (key,))
     conn.commit()
-
 
 # ---------------- KEYBOARDS ----------------
 def main_kb():
@@ -57,24 +59,26 @@ def main_kb():
         [InlineKeyboardButton(text="✅ Проверить подписку", callback_data="check")],
         [InlineKeyboardButton(text="🎧 Примеры работ", url=WORKS_CHANNEL_LINK)],
         [InlineKeyboardButton(text="💬 Заказать сведение", url=DM_LINK)],
-        [InlineKeyboardButton(text="🔑 Ввести ключ", callback_data="code")]
+        [InlineKeyboardButton(text="🔑 Ввести ключ", callback_data="enter_code")]
     ])
-
 
 def admin_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Статистика", callback_data="stats")],
-        [InlineKeyboardButton(text="➕ Создать код", callback_data="new_code")],
-        [InlineKeyboardButton(text="📦 Коды", callback_data="codes")]
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")],
+        [InlineKeyboardButton(text="➕ Создать код", callback_data="admin_create")],
+        [InlineKeyboardButton(text="📦 Коды", callback_data="admin_codes")]
     ])
 
+def cancel_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")]
+    ])
 
 # ---------------- START ----------------
 @dp.message(Command("start"))
 async def start(m: Message):
     stat("start")
-    await m.answer("👋 Добро пожаловать!", reply_markup=main_kb())
-
+    await m.answer("👋 Главное меню:", reply_markup=main_kb())
 
 # ---------------- CHECK SUB ----------------
 @dp.callback_query(F.data == "check")
@@ -84,27 +88,48 @@ async def check(c: CallbackQuery):
     try:
         member = await bot.get_chat_member(CHANNEL_ID, c.from_user.id)
         if member.status in ["member", "administrator", "creator"]:
-            await c.message.answer("✅ Подписка активна")
+            await c.message.answer("✅ Подписка есть")
         else:
-            await c.message.answer("❌ Ты не подписан")
+            await c.message.answer("❌ Нет подписки")
     except:
-        await c.message.answer("⚠️ Не удалось проверить")
+        await c.message.answer("⚠️ Ошибка проверки")
 
     await c.answer()
-
 
 # ---------------- ENTER CODE ----------------
-@dp.callback_query(F.data == "code")
-async def code_enter(c: CallbackQuery):
-    stat("code")
-    await c.message.answer("🔑 Введи 5-значный код:")
+@dp.callback_query(F.data == "enter_code")
+async def enter_code(c: CallbackQuery):
+    stat("enter_code")
+
+    user_state[c.from_user.id] = "waiting_code"
+
+    await c.message.answer(
+        "🔑 Введи 5-значный код:",
+        reply_markup=cancel_kb()
+    )
     await c.answer()
 
+# ---------------- CANCEL ----------------
+@dp.callback_query(F.data == "cancel")
+async def cancel(c: CallbackQuery):
+    user_state.pop(c.from_user.id, None)
 
-# ---------------- CODE CHECK ----------------
+    await c.message.answer("❌ Отменено")
+    await c.answer()
+
+# ---------------- TEXT HANDLER ----------------
 @dp.message()
 async def handle(m: Message):
     text = (m.text or "").strip()
+    uid = m.from_user.id
+
+    # если НЕ режим кода — игнор
+    if user_state.get(uid) != "waiting_code":
+        return
+
+    # защита от команд
+    if text.startswith("/"):
+        return
 
     cur.execute("SELECT content FROM codes WHERE code=?", (text,))
     row = cur.fetchone()
@@ -114,20 +139,18 @@ async def handle(m: Message):
     else:
         await m.answer("❌ Неверный код")
 
-
 # ---------------- ADMIN ----------------
-admin_state = {}
+admin_temp = {}
 
 @dp.message(Command("admin"))
 async def admin(m: Message):
     if m.from_user.id != ADMIN_ID:
         return
-    await m.answer("⚙️ Админ панель", reply_markup=admin_kb())
+    await m.answer("⚙️ Админ-панель:", reply_markup=admin_kb())
 
-
-# ---------------- STATS ----------------
-@dp.callback_query(F.data == "stats")
-async def stats(c: CallbackQuery):
+# ---------------- ADMIN STATS ----------------
+@dp.callback_query(F.data == "admin_stats")
+async def admin_stats(c: CallbackQuery):
     if c.from_user.id != ADMIN_ID:
         return
 
@@ -141,55 +164,53 @@ async def stats(c: CallbackQuery):
     await c.message.answer(msg)
     await c.answer()
 
-
 # ---------------- CREATE CODE ----------------
-@dp.callback_query(F.data == "new_code")
-async def new_code(c: CallbackQuery):
+@dp.callback_query(F.data == "admin_create")
+async def create_code(c: CallbackQuery):
     if c.from_user.id != ADMIN_ID:
         return
 
     code = str(random.randint(10000, 99999))
-    admin_state[c.from_user.id] = {"code": code}
+    admin_temp[ADMIN_ID] = code
 
     await c.message.answer(f"➕ Код: {code}\nОтправь контент (текст/фото/видео)")
     await c.answer()
 
-
 # ---------------- SAVE ADMIN CONTENT ----------------
 @dp.message()
-async def admin_save(m: Message):
+async def save_admin(m: Message):
     if m.from_user.id != ADMIN_ID:
         return
 
-    if m.from_user.id not in admin_state:
+    if ADMIN_ID not in admin_temp:
         return
 
-    code = admin_state[m.from_user.id]["code"]
+    code = admin_temp[ADMIN_ID]
 
     content = ""
-    ctype = ""
+    ctype = "text"
 
     if m.text:
         content = m.text
-        ctype = "text"
     elif m.photo:
         content = m.photo[-1].file_id
         ctype = "photo"
     elif m.video:
         content = m.video.file_id
         ctype = "video"
+    else:
+        content = "unsupported"
 
     cur.execute("INSERT OR REPLACE INTO codes VALUES (?, ?, ?)", (code, content, ctype))
     conn.commit()
 
-    del admin_state[m.from_user.id]
+    del admin_temp[ADMIN_ID]
 
     await m.answer(f"✅ Код {code} сохранён")
 
-
 # ---------------- LIST CODES ----------------
-@dp.callback_query(F.data == "codes")
-async def codes(c: CallbackQuery):
+@dp.callback_query(F.data == "admin_codes")
+async def list_codes(c: CallbackQuery):
     if c.from_user.id != ADMIN_ID:
         return
 
@@ -200,7 +221,6 @@ async def codes(c: CallbackQuery):
 
     await c.message.answer(text)
     await c.answer()
-
 
 # ---------------- RUN ----------------
 async def main():
