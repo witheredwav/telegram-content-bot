@@ -12,9 +12,9 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # 🔐 НАСТРОЙКИ
 # =========================
 
-BOT_TOKEN = "ВСТАВЬ_ТОКЕН"
-CHANNEL_ID = "@yourchannel"
-ADMIN_ID = 123456789
+BOT_TOKEN = "8586166190:AAHOAcP29AYDThbBn5TN60ZeP7RQfhfeEe8"
+CHANNEL_ID = "@witheredoff"
+ADMIN_ID = 793806918
 
 
 bot = Bot(token=BOT_TOKEN)
