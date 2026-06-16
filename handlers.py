@@ -1,5 +1,4 @@
 import random
-
 from aiogram import Router, F
 from aiogram.types import Message
 
@@ -11,7 +10,7 @@ from db import (
     users_count,
     codes_count,
     get_all_codes,
-    delete_code
+    delete_code_db
 )
 
 router = Router()
@@ -23,7 +22,7 @@ pending = {}
 @router.message(F.text == "/start")
 async def start(msg: Message):
     await add_user(msg.from_user.id)
-    await msg.answer("Привет! бот работает")
+    await msg.answer("бот работает")
 
 
 # ================= CREATE CODE =================
@@ -36,10 +35,10 @@ async def create(msg: Message):
     code = str(random.randint(0, 99999)).zfill(5)
     pending[msg.from_user.id] = code
 
-    await msg.answer(f"Код: {code}\nТеперь отправь контент")
+    await msg.answer(f"код: {code}\nотправь контент")
 
 
-# ================= SAVE CONTENT =================
+# ================= SAVE CONTENT (СТРОГО ТОЛЬКО ДЛЯ pending) =================
 @router.message()
 async def save(msg: Message):
 
@@ -52,19 +51,18 @@ async def save(msg: Message):
 
     if msg.photo:
         await add_code(code, "photo", msg.photo[-1].file_id)
-
     elif msg.video:
         await add_code(code, "video", msg.video.file_id)
-
     elif msg.document:
         await add_code(code, "document", msg.document.file_id)
-
-    elif msg.text:
+    elif msg.text and not msg.text.startswith("/"):
         await add_code(code, "text", msg.text)
+    else:
+        return
 
     pending.pop(msg.from_user.id)
 
-    await msg.answer("Сохранено")
+    await msg.answer("сохранено")
 
 
 # ================= CHECK CODE =================
@@ -74,7 +72,7 @@ async def check(msg: Message):
     data = await get_code(msg.text)
 
     if not data:
-        await msg.answer("Неверный код")
+        await msg.answer("неверный код")
         return
 
     t = data[1]
@@ -82,13 +80,10 @@ async def check(msg: Message):
 
     if t == "text":
         await msg.answer(c)
-
     elif t == "photo":
         await msg.answer_photo(c)
-
     elif t == "video":
         await msg.answer_video(c)
-
     elif t == "document":
         await msg.answer_document(c)
 
@@ -101,8 +96,8 @@ async def stats(msg: Message):
         return
 
     await msg.answer(
-        f"Users: {await users_count()}\n"
-        f"Codes: {await codes_count()}"
+        f"users: {await users_count()}\n"
+        f"codes: {await codes_count()}"
     )
 
 
@@ -115,14 +110,14 @@ async def codes(msg: Message):
 
     data = await get_all_codes()
 
-    text = "Коды:\n"
+    text = ""
     for c in data:
         text += c[0] + "\n"
 
-    await msg.answer(text)
+    await msg.answer(text if text else "нет кодов")
 
 
-# ================= DELETE CODE =================
+# ================= DELETE =================
 @router.message(F.text.startswith("/delete_code"))
 async def delete(msg: Message):
 
@@ -137,5 +132,5 @@ async def delete(msg: Message):
 
     code = parts[1]
 
-    await delete_code(code)
-    await msg.answer("удалено (если существовало)")
+    await delete_code_db(code)
+    await msg.answer("удалено (если существовал)")
