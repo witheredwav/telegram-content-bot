@@ -10,6 +10,8 @@ from handlers.start import router as start_router
 
 from handlers.subscription import router as sub_router
 
+from handlers.codes import router as codes_router
+
 bot = Bot(token=BOT_TOKEN)
 
 dp = Dispatcher()
@@ -24,6 +26,8 @@ await on_startup()
 
 dp.include_router(start_router)
 dp.include_router(sub_router)
+dp.include_router(codes_router)
+
 
 await dp.start_polling(bot)
 
