@@ -20,7 +20,7 @@ def admin_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика", callback_data="stats")],
         [InlineKeyboardButton(text="📦 Коды", callback_data="codes")],
-        [InlineKeyboardButton(text="🗑 Удалить код", callback_data="del_menu")],
+        [InlineKeyboardButton(text="🗑 Удалить код", callback_data="del")],
         [InlineKeyboardButton(text="🎲 Создать код", callback_data="create")],
         [InlineKeyboardButton(text="👥 Рефералы", callback_data="refs")]
     ])
