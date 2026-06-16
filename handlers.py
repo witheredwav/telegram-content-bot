@@ -1,4 +1,5 @@
 import random
+import aiosqlite
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -14,6 +15,7 @@ router = Router()
 pending = {}
 pending_delete = {}
 pending_ref_delete = {}
+pending_ref_code = {}
 
 
 # ================= START =================
@@ -23,6 +25,8 @@ async def start(msg: Message):
     await add_user(msg.from_user.id)
     await add_stat("start")
 
+    await add_event(msg.from_user.id, "start")
+
     await msg.answer("👋 Добро пожаловать", reply_markup=start_kb())
 
 
@@ -31,6 +35,7 @@ async def start(msg: Message):
 async def check(cb: CallbackQuery):
 
     await add_stat("check")
+    await add_event(cb.from_user.id, "check")
 
     member = await cb.bot.get_chat_member(
         f"@{CHANNEL_USERNAME}",
@@ -48,7 +53,14 @@ async def check(cb: CallbackQuery):
     await cb.message.answer("✅ Доступ открыт", reply_markup=menu_kb())
 
 
-# ================= CODE =================
+# ================= PORTFOLIO CLICK =================
+@router.callback_query(F.data == "portfolio")
+async def portfolio(cb: CallbackQuery):
+    await add_event(cb.from_user.id, "portfolio")
+    await cb.message.answer("📂 Примеры работ...")
+
+
+# ================= CODE SYSTEM =================
 @router.callback_query(F.data == "code")
 async def code(cb: CallbackQuery):
     await cb.message.answer("🔑 Введите 5-значный код")
@@ -58,6 +70,7 @@ async def code(cb: CallbackQuery):
 async def enter_code(msg: Message):
 
     await add_stat("code")
+    await add_event(msg.from_user.id, f"code:{msg.text}")
 
     data = await get_code(msg.text)
 
@@ -71,6 +84,7 @@ async def enter_code(msg: Message):
 # ================= ADMIN =================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
+
     if msg.from_user.id != ADMIN_ID:
         return
 
@@ -81,21 +95,24 @@ async def admin(msg: Message):
 @router.callback_query(F.data == "admin_stats")
 async def stats(cb: CallbackQuery):
 
-    if cb.from_user.id != ADMIN_ID:
-        return
+    top_refs = await top_events("ref_open")
+    top_codes = await top_events("start")
+    top_portfolio = await top_events("portfolio")
 
     text = f"""
-📊 STATISTICS
+📊 SAAS ANALYTICS
 
-👤 Users: {await users_count() or 0}
-📦 Codes: {await codes_count() or 0}
+👤 Users: {await users_count()}
+📦 Codes: {await codes_count()}
 
-start: {await get_stat("start") or 0}
-check: {await get_stat("check") or 0}
-code: {await get_stat("code") or 0}
+🔥 TOP REF CLICKS:
+{top_refs[:5]}
+
+📂 PORTFOLIO CLICKS:
+{top_portfolio[:5]}
 """
 
-    await cb.message.answer(text.strip())
+    await cb.message.answer(text)
 
 
 # ================= CODES LIST =================
@@ -119,7 +136,7 @@ async def codes(cb: CallbackQuery):
         ])
 
     await cb.message.answer(
-        "📦 КОДЫ (нажми для удаления)",
+        "📦 КОДЫ",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=kb)
     )
 
@@ -153,7 +170,7 @@ async def confirm_delete(cb: CallbackQuery):
     await delete_code_db(code)
     pending_delete.pop(cb.from_user.id, None)
 
-    await cb.message.answer(f"🗑 Код {code} удалён")
+    await cb.message.answer(f"🗑 Код удалён")
 
 
 @router.callback_query(F.data == "cancel_del")
@@ -163,40 +180,56 @@ async def cancel_delete(cb: CallbackQuery):
     await cb.message.answer("❌ Отменено")
 
 
-# ================= CREATE CODE =================
-@router.callback_query(F.data == "admin_create")
-async def create(cb: CallbackQuery):
+# ================= REF SYSTEM =================
+@router.callback_query(F.data == "ref")
+async def ref(cb: CallbackQuery):
 
-    code = str(random.randint(10000, 99999))
-    pending[cb.from_user.id] = code
+    await add_event(cb.from_user.id, "ref_open")
 
-    await cb.message.answer(f"🎲 Код: {code}\nОтправь текст")
+    await cb.message.answer("👥 Введите ваш реф код:")
+    pending_ref_code[cb.from_user.id] = True
 
 
 @router.message()
-async def save(msg: Message):
+async def ref_enter(msg: Message):
 
-    if msg.from_user.id not in pending:
+    if msg.from_user.id in pending_ref_code:
+
+        code = msg.text.strip()
+
+        ok = await add_ref_if_valid(msg.from_user.id, code)
+
+        if not ok:
+            await msg.answer("⚠️ Реферал не засчитан")
+            pending_ref_code.pop(msg.from_user.id)
+            return
+
+        percent = await update_ref_level(msg.from_user.id)
+
+        await msg.answer(f"🎉 Реферал засчитан\n💰 Скидка: {percent}%")
+
+        if percent in [10, 15, 20]:
+            await msg.answer(f"🏆 Новый уровень скидки: {percent}%")
+
+        pending_ref_code.pop(msg.from_user.id)
         return
 
-    code = pending[msg.from_user.id]
+    # CREATE CODE SAVE (ADMIN)
+    if msg.from_user.id in pending:
+        code = pending[msg.from_user.id]
 
-    await add_code(code, msg.text)
+        await add_code(code, msg.text)
 
-    pending.pop(msg.from_user.id)
+        pending.pop(msg.from_user.id)
 
-    await msg.answer("✅ Сохранено")
+        await msg.answer("✅ Сохранено")
 
 
-# ================= REF SYSTEM =================
+# ================= REF ADMIN =================
 @router.callback_query(F.data == "admin_refs")
 async def refs(cb: CallbackQuery):
 
     data = await get_all_refs()
-
-    if not data:
-        await cb.message.answer("❌ Нет рефералов")
-        return
 
     kb = []
 
@@ -215,7 +248,7 @@ async def refs(cb: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("ref_del:"))
-async def ref_delete(cb: CallbackQuery):
+async def ref_del(cb: CallbackQuery):
 
     user_id = int(cb.data.split(":")[1])
     pending_ref_delete[cb.from_user.id] = user_id
@@ -234,7 +267,7 @@ async def ref_delete(cb: CallbackQuery):
 
 
 @router.callback_query(F.data == "confirm_ref_del")
-async def confirm_ref_delete(cb: CallbackQuery):
+async def confirm_ref_del(cb: CallbackQuery):
 
     user_id = pending_ref_delete.get(cb.from_user.id)
 
@@ -249,7 +282,7 @@ async def confirm_ref_delete(cb: CallbackQuery):
 
 
 @router.callback_query(F.data == "cancel_ref_del")
-async def cancel_ref_delete(cb: CallbackQuery):
+async def cancel_ref_del(cb: CallbackQuery):
 
     pending_ref_delete.pop(cb.from_user.id, None)
     await cb.message.answer("❌ Отменено")
