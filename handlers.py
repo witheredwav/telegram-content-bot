@@ -5,7 +5,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.enums import ChatMemberStatus
 
 from config import CHANNEL_USERNAME, ADMIN_ID
-from db import add_code, get_code
+from db import add_user, add_code, get_code, users_count, codes_count
 from keyboards import start_kb, menu_kb
 
 router = Router()
@@ -16,8 +16,10 @@ pending_code = {}
 # ================= START =================
 @router.message(F.text == "/start")
 async def start(msg: Message):
+    await add_user(msg.from_user.id)
+
     await msg.answer(
-        "👋 Привет!\n\nПодпишись на канал",
+        "👋 Привет!\n\nПодпишись на канал 👇",
         reply_markup=start_kb()
     )
 
@@ -54,6 +56,37 @@ async def enter_code(cb: CallbackQuery):
     await cb.answer()
 
 
+# ================= CHECK CODE =================
+@router.message(F.text.regexp(r"^\d{5}$"))
+async def check_code(msg: Message):
+
+    code = msg.text.strip()
+
+    data = await get_code(code)
+
+    if not data:
+        await msg.answer("❌ Неверный код")
+        return
+
+    content_type = data[1]
+    content = data[2]
+
+    if content_type == "text":
+        await msg.answer(content)
+
+    elif content_type == "photo":
+        await msg.answer_photo(photo=content)
+
+    elif content_type == "video":
+        await msg.answer_video(video=content)
+
+    elif content_type == "document":
+        await msg.answer_document(document=content)
+
+    else:
+        await msg.answer("❌ Ошибка контента")
+
+
 # ================= ADMIN =================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
@@ -63,7 +96,8 @@ async def admin(msg: Message):
 
     await msg.answer(
         "👑 АДМИНКА\n\n"
-        "/create_code - создать код"
+        "/create_code - создать код\n"
+        "/stats - статистика"
     )
 
 
@@ -79,12 +113,12 @@ async def create_code(msg: Message):
     pending_code[msg.from_user.id] = code
 
     await msg.answer(
-        f"🎲 Код: {code}\n\n"
+        f"🎲 Код создан: {code}\n\n"
         "Отправь контент (текст, фото, видео, файл)"
     )
 
 
-# ================= SAVE CONTENT (ТОЛЬКО АДМИН) =================
+# ================= SAVE CONTENT =================
 @router.message(F.from_user.id == ADMIN_ID)
 async def save_content(msg: Message):
 
@@ -113,7 +147,7 @@ async def save_content(msg: Message):
         content = msg.text
 
     else:
-        await msg.answer("❌ Неизвестный формат")
+        await msg.answer("❌ Неподдерживаемый формат")
         return
 
     await add_code(code, content_type, content)
@@ -123,45 +157,7 @@ async def save_content(msg: Message):
     await msg.answer(f"✅ Код {code} сохранён!")
 
 
-# ================= CHECK CODE (ГЛАВНЫЙ ФИКС) =================
-@router.message(F.text.regexp(r"^\d{5}$"))
-async def check_code(msg: Message):
-
-    code = msg.text.strip()
-
-    data = await get_code(code)
-
-    if not data:
-        await msg.answer("❌ Неверный код")
-        return
-
-    code_db = data[0]
-    content_type = data[1]
-    content = data[2]
-
-    # ================= TEXT =================
-    if content_type == "text":
-        await msg.answer(content)
-
-    # ================= PHOTO =================
-    elif content_type == "photo":
-        await msg.answer_photo(photo=content)
-
-    # ================= VIDEO =================
-    elif content_type == "video":
-        await msg.answer_video(video=content)
-
-    # ================= DOCUMENT =================
-    elif content_type == "document":
-        await msg.answer_document(document=content)
-
-    else:
-        await msg.answer("❌ Ошибка: неизвестный тип контента")
-
-
-from db import users_count, codes_count
-
-
+# ================= STATS =================
 @router.message(F.text == "/stats")
 async def stats(msg: Message):
 
