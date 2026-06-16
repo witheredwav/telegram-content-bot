@@ -17,12 +17,12 @@ logging.basicConfig(level=logging.INFO)
 
 # ─── КОНФИГ ───────────────────────────────────────────────────────────────────
 
-BOT_TOKEN         = os.getenv("BOT_TOKEN")
-ADMIN_ID          = int(os.getenv("ADMIN_ID", "0"))
-CHANNEL_ID        = os.getenv("CHANNEL_ID")          # @username или -100...
-CHANNEL_LINK      = os.getenv("CHANNEL_LINK")        # https://t.me/...
-WORKS_CHANNEL_LINK= os.getenv("WORKS_CHANNEL_LINK")  # https://t.me/...
-DM_LINK           = os.getenv("DM_LINK")             # https://t.me/username
+BOT_TOKEN          = os.getenv("BOT_TOKEN")
+ADMIN_ID           = int(os.getenv("ADMIN_ID", "0"))
+CHANNEL_ID         = os.getenv("CHANNEL_ID")           # @username или -100...
+CHANNEL_LINK       = os.getenv("CHANNEL_LINK")         # https://t.me/...
+WORKS_CHANNEL_LINK = os.getenv("WORKS_CHANNEL_LINK")   # https://t.me/...
+DM_LINK            = os.getenv("DM_LINK")              # https://t.me/username
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не задан! Добавь переменную окружения BOT_TOKEN.")
@@ -55,10 +55,10 @@ def get_stats_text() -> str:
     total = db["stats"].get("total", {})
     daily = db["stats"].get("daily", {}).get(today, {})
     events = {
-        "start": "🚀 /start",
+        "start":     "🚀 /start",
         "check_sub": "✅ Проверка подписки",
-        "works": "🎧 Примеры работ",
-        "order": "💬 Заказать сведение",
+        "works":     "🎧 Примеры работ",
+        "order":     "💬 Заказать сведение",
         "enter_key": "🔑 Ввод ключа",
     }
     lines = ["📊 *Статистика кликов*\n", "*За сегодня:*"]
@@ -89,29 +89,25 @@ class AdminFSM(StatesGroup):
 
 # ─── КЛАВИАТУРЫ ───────────────────────────────────────────────────────────────
 
-# Страница 1 — до подписки
 def kb_page1() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔔 Подписаться на канал", url=CHANNEL_LINK)],
         [InlineKeyboardButton(text="✅ Проверить подписку",   callback_data="check_sub")],
     ])
 
-# Страница 2 — после подписки
 def kb_page2() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎧 Примеры работ",    url=WORKS_CHANNEL_LINK)],
-        [InlineKeyboardButton(text="💬 Заказать сведение", url=DM_LINK)],
-        [InlineKeyboardButton(text="🔑 Ввести ключ",       callback_data="enter_key")],
-        [InlineKeyboardButton(text="◀️ Назад",             callback_data="back_to_page1")],
+        [InlineKeyboardButton(text="🎧 Примеры работ",     url=WORKS_CHANNEL_LINK)],
+        [InlineKeyboardButton(text="💬 Заказать сведение",  url=DM_LINK)],
+        [InlineKeyboardButton(text="🔑 Ввести ключ",        callback_data="enter_key")],
+        [InlineKeyboardButton(text="◀️ Назад",              callback_data="back_to_page1")],
     ])
 
-# Отмена ввода ключа
 def kb_cancel_key() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_key")]
     ])
 
-# Главное меню админа
 def kb_admin() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика",   callback_data="admin_stats")],
@@ -119,7 +115,6 @@ def kb_admin() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📦 Список кодов", callback_data="admin_codes")],
     ])
 
-# Выбор типа контента
 def kb_content_type() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📝 Текст", callback_data="ctype_text"),
@@ -130,25 +125,36 @@ def kb_content_type() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_home")],
     ])
 
-# Подтверждение удаления кода
 def kb_confirm_del(code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Да, удалить", callback_data=f"del_yes_{code}"),
          InlineKeyboardButton(text="❌ Отмена",       callback_data="admin_codes")],
     ])
 
-# Кнопка "Назад в админку"
 def kb_back_admin() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Назад", callback_data="admin_home")]
     ])
 
+def kb_cancel_admin() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_home")]
+    ])
+
+def build_codes_kb(codes: dict) -> InlineKeyboardMarkup:
+    buttons = []
+    for code, entry in sorted(codes.items()):
+        buttons.append([
+            InlineKeyboardButton(text=f"🔑 {code}  [{entry['type']}]", callback_data=f"view_{code}"),
+            InlineKeyboardButton(text="🗑",                             callback_data=f"ask_del_{code}"),
+        ])
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="admin_home")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
 # ─── BOT ──────────────────────────────────────────────────────────────────────
 
 bot = Bot(token=BOT_TOKEN)
 dp  = Dispatcher(storage=MemoryStorage())
-
-# ─── ВСПОМОГАТЕЛЬНАЯ: проверка подписки ───────────────────────────────────────
 
 async def is_subscribed(user_id: int) -> bool:
     try:
@@ -172,8 +178,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
         reply_markup=kb_page1()
     )
 
-# ── Проверка подписки ─────────────────────────────────────────────────────────
-
 @dp.callback_query(F.data == "check_sub")
 async def cb_check_sub(callback: types.CallbackQuery):
     track("check_sub")
@@ -188,8 +192,6 @@ async def cb_check_sub(callback: types.CallbackQuery):
             show_alert=True
         )
 
-# ── Назад на страницу 1 ───────────────────────────────────────────────────────
-
 @dp.callback_query(F.data == "back_to_page1")
 async def cb_back_page1(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
@@ -200,20 +202,14 @@ async def cb_back_page1(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=kb_page1()
     )
 
-# ── Ввод ключа ────────────────────────────────────────────────────────────────
-
 @dp.callback_query(F.data == "enter_key")
 async def cb_enter_key(callback: types.CallbackQuery, state: FSMContext):
     track("enter_key")
-    # Защита: проверяем подписку перед вводом ключа
     if not await is_subscribed(callback.from_user.id):
         await callback.answer("❌ Сначала подпишись на канал!", show_alert=True)
         return
     await state.set_state(UserFSM.waiting_key)
-    await callback.message.answer(
-        "🔑 Введи 5-значный код:",
-        reply_markup=kb_cancel_key()
-    )
+    await callback.message.answer("🔑 Введи 5-значный код:", reply_markup=kb_cancel_key())
     await callback.answer()
 
 @dp.callback_query(F.data == "cancel_key")
@@ -226,24 +222,15 @@ async def cb_cancel_key(callback: types.CallbackQuery, state: FSMContext):
 async def process_key(message: types.Message, state: FSMContext):
     code = message.text.strip() if message.text else ""
     db = load_db()
-
     if code not in db["codes"]:
-        await message.answer(
-            "❌ Неверный код. Попробуй ещё раз или вернись в меню:",
-            reply_markup=kb_cancel_key()
-        )
-        return  # НЕ сбрасываем state — даём попробовать снова
-
-    entry = db["codes"][code]
+        await message.answer("❌ Неверный код. Попробуй ещё раз:", reply_markup=kb_cancel_key())
+        return
+    entry   = db["codes"][code]
     ctype   = entry["type"]
     content = entry["content"]
     caption = entry.get("caption", "") or f"Код: {code}"
-
     await state.clear()
-
-    if ctype == "text":
-        await message.answer(f"✅ *Код {code}:*\n\n{content}", parse_mode="Markdown")
-    elif ctype == "link":
+    if ctype in ("text", "link"):
         await message.answer(f"✅ *Код {code}:*\n\n{content}", parse_mode="Markdown")
     elif ctype == "photo":
         await message.answer_photo(content, caption=caption)
@@ -251,54 +238,40 @@ async def process_key(message: types.Message, state: FSMContext):
         await message.answer_video(content, caption=caption)
     elif ctype == "file":
         await message.answer_document(content, caption=caption)
-
     await message.answer("Главное меню:", reply_markup=kb_page2())
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  АДМИН
 # ══════════════════════════════════════════════════════════════════════════════
 
-def admin_only(func):
-    """Декоратор: только для ADMIN_ID"""
-    async def wrapper(event, *args, **kwargs):
-        uid = event.from_user.id if hasattr(event, "from_user") else 0
-        if uid != ADMIN_ID:
-            if isinstance(event, types.CallbackQuery):
-                await event.answer("⛔ Нет доступа.", show_alert=True)
-            else:
-                await event.answer("⛔ Нет доступа.")
-            return
-        return await func(event, *args, **kwargs)
-    return wrapper
-
 @dp.message(Command("admin"))
-@admin_only
 async def cmd_admin(message: types.Message, state: FSMContext):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("⛔ Нет доступа.")
+        return
     await state.clear()
     await message.answer("🛠 *Админ-панель*", parse_mode="Markdown", reply_markup=kb_admin())
 
 @dp.callback_query(F.data == "admin_home")
-@admin_only
 async def cb_admin_home(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
     await state.clear()
     await callback.message.edit_text("🛠 *Админ-панель*", parse_mode="Markdown", reply_markup=kb_admin())
 
-# ── Статистика ────────────────────────────────────────────────────────────────
-
 @dp.callback_query(F.data == "admin_stats")
-@admin_only
 async def cb_admin_stats(callback: types.CallbackQuery):
-    await callback.message.edit_text(
-        get_stats_text(),
-        parse_mode="Markdown",
-        reply_markup=kb_back_admin()
-    )
-
-# ── Создать код ───────────────────────────────────────────────────────────────
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
+    await callback.message.edit_text(get_stats_text(), parse_mode="Markdown", reply_markup=kb_back_admin())
 
 @dp.callback_query(F.data == "admin_create")
-@admin_only
 async def cb_admin_create(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
     code = next_free_code()
     if not code:
         await callback.answer("❌ Все коды исчерпаны!", show_alert=True)
@@ -311,9 +284,11 @@ async def cb_admin_create(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=kb_content_type()
     )
 
-@dp.callback_query(F.data.startswith("ctype_"), AdminFSM.choose_type)
-@admin_only
+@dp.callback_query(F.data.startswith("ctype_"))
 async def cb_choose_type(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
     ctype = callback.data.replace("ctype_", "")
     await state.update_data(content_type=ctype)
     await state.set_state(AdminFSM.send_content)
@@ -324,69 +299,54 @@ async def cb_choose_type(callback: types.CallbackQuery, state: FSMContext):
         "file":  "📁 Отправь файл (можно с подписью):",
         "link":  "🔗 Отправь ссылку текстом:",
     }
-    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_home")]
-    ])
-    await callback.message.edit_text(prompts.get(ctype, "Отправь контент:"), reply_markup=cancel_kb)
+    await callback.message.edit_text(prompts.get(ctype, "Отправь контент:"), reply_markup=kb_cancel_admin())
 
 @dp.message(AdminFSM.send_content)
-@admin_only
 async def admin_save_content(message: types.Message, state: FSMContext):
+    if message.from_user.id != ADMIN_ID:
+        return
     data  = await state.get_data()
     code  = data["new_code"]
     ctype = data["content_type"]
     db    = load_db()
     entry = {"type": ctype}
-
     if ctype in ("text", "link"):
         if not message.text:
-            await message.answer("⚠️ Нужен текст.")
+            await message.answer("⚠️ Нужен текст. Попробуй снова:")
             return
         entry["content"] = message.text
     elif ctype == "photo":
         if not message.photo:
-            await message.answer("⚠️ Нужно фото.")
+            await message.answer("⚠️ Нужно фото. Попробуй снова:")
             return
         entry["content"] = message.photo[-1].file_id
         entry["caption"] = message.caption or ""
     elif ctype == "video":
         if not message.video:
-            await message.answer("⚠️ Нужно видео.")
+            await message.answer("⚠️ Нужно видео. Попробуй снова:")
             return
         entry["content"] = message.video.file_id
         entry["caption"] = message.caption or ""
     elif ctype == "file":
         if not message.document:
-            await message.answer("⚠️ Нужен файл.")
+            await message.answer("⚠️ Нужен файл. Попробуй снова:")
             return
         entry["content"] = message.document.file_id
         entry["caption"] = message.caption or ""
-
     db["codes"][code] = entry
     save_db(db)
     await state.clear()
-
     await message.answer(
-        f"✅ Код *{code}* сохранён!\n\nТип: `{ctype}`",
+        f"✅ Код *{code}* сохранён!\nТип: `{ctype}`",
         parse_mode="Markdown",
         reply_markup=kb_admin()
     )
 
-# ── Список кодов ──────────────────────────────────────────────────────────────
-
-def build_codes_kb(codes: dict) -> InlineKeyboardMarkup:
-    buttons = []
-    for code, entry in sorted(codes.items()):
-        buttons.append([
-            InlineKeyboardButton(text=f"🔑 {code}  [{entry['type']}]", callback_data=f"view_{code}"),
-            InlineKeyboardButton(text="🗑",                             callback_data=f"ask_del_{code}"),
-        ])
-    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="admin_home")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
 @dp.callback_query(F.data == "admin_codes")
-@admin_only
 async def cb_admin_codes(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
     await state.clear()
     db    = load_db()
     codes = db["codes"]
@@ -399,34 +359,34 @@ async def cb_admin_codes(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=build_codes_kb(codes)
     )
 
-# ── Просмотр кода ─────────────────────────────────────────────────────────────
-
 @dp.callback_query(F.data.startswith("view_"))
-@admin_only
 async def cb_view_code(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
     code = callback.data.replace("view_", "")
     db   = load_db()
     if code not in db["codes"]:
         await callback.answer("Код не найден.", show_alert=True)
         return
     entry   = db["codes"][code]
-    preview = entry.get("content", "")[:60]
+    preview = str(entry.get("content", ""))[:60]
     text = (
         f"🔑 *Код:* `{code}`\n"
         f"📋 *Тип:* {entry['type']}\n"
         f"📄 *Содержимое:* `{preview}`"
     )
     back_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗑 Удалить",    callback_data=f"ask_del_{code}")],
-        [InlineKeyboardButton(text="◀️ К списку", callback_data="admin_codes")],
+        [InlineKeyboardButton(text="🗑 Удалить",      callback_data=f"ask_del_{code}")],
+        [InlineKeyboardButton(text="◀️ К списку кодов", callback_data="admin_codes")],
     ])
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=back_kb)
 
-# ── Удаление кода ─────────────────────────────────────────────────────────────
-
 @dp.callback_query(F.data.startswith("ask_del_"))
-@admin_only
 async def cb_ask_delete(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
     code = callback.data.replace("ask_del_", "")
     await callback.message.edit_text(
         f"🗑 Удалить код *{code}*?\n\nЭто действие необратимо.",
@@ -435,8 +395,10 @@ async def cb_ask_delete(callback: types.CallbackQuery):
     )
 
 @dp.callback_query(F.data.startswith("del_yes_"))
-@admin_only
 async def cb_confirm_delete(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
+        return
     code = callback.data.replace("del_yes_", "")
     db   = load_db()
     if code in db["codes"]:
@@ -445,8 +407,6 @@ async def cb_confirm_delete(callback: types.CallbackQuery):
         await callback.answer(f"✅ Код {code} удалён.", show_alert=True)
     else:
         await callback.answer("❌ Код уже не существует.", show_alert=True)
-
-    # Показываем обновлённый список
     codes = db["codes"]
     if not codes:
         await callback.message.edit_text("📦 Кодов пока нет.", reply_markup=kb_back_admin())
