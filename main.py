@@ -1,6 +1,6 @@
 import asyncio
-
 from aiogram import Bot, Dispatcher
+
 from config import BOT_TOKEN
 from db import init
 from handlers import router
@@ -9,8 +9,7 @@ bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
 async def main():
-    await init()   # ❗ ЭТО ОБЯЗАТЕЛЬНО
-
+    await init()
     dp.include_router(router)
 
     print("BOT STARTED")
