@@ -10,7 +10,7 @@ router = Router()
 @router.callback_query(F.data == "check_sub")
 async def check_subscription(callback: CallbackQuery):
 
-```
+
 user_id = callback.from_user.id
 
 try:
@@ -44,4 +44,4 @@ except Exception as e:
     )
 
 await callback.answer()
-```
+
