@@ -1,4 +1,4 @@
-BOT_TOKEN = "ТВОЙ_ТОКЕН"
-CHANNEL_ID = "@witheredoff"
+BOT_TOKEN = "8586166190:AAHXasvk5TD6Oo7nB4jCwYr1rQ2tVlWLxmw"
 ADMIN_ID = 793806918
-EXAMPLES_CHANNEL = "@witheredwav"
+CHANNEL_ID = "@witheredoff"
+LOG_CHAT = ADMIN_ID
