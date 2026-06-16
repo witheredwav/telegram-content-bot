@@ -61,7 +61,7 @@ async def get_all_codes():
         return await cur.fetchall()
 
 
-async def delete_code(code):
+async def delete_code_db(code):
     async with aiosqlite.connect(DB) as db:
         await db.execute("DELETE FROM codes WHERE code=?", (code,))
         await db.commit()
