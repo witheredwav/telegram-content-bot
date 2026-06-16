@@ -11,7 +11,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # 🔐 НАСТРОЙКИ
 # =====================
 
-BOT_TOKEN = "8586166190:AAHOAcP29AYDThbBn5TN60ZeP7RQfhfeEe8"
+BOT_TOKEN = "8586166190:AAHXasvk5TD6Oo7nB4jCwYr1rQ2tVlWLxmw"
 CHANNEL_ID = "@witheredoff"
 ADMIN_ID = 793806918
 
