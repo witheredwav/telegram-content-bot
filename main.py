@@ -1,37 +1,30 @@
 import asyncio
 
 from aiogram import Dispatcher
-from sqlalchemy import text
 
 from app.bot import bot
+from app.utils.logger import logger
 
+from app.database.migrate import run_migrations
 from app.database.session import engine
 from app.database.redis import redis
 
-from app.utils.logger import logger
 
+async def check_services():
+    async with engine.begin() as conn:
+        await conn.run_sync(lambda _: None)
 
-async def check_postgres() -> None:
-    async with engine.begin() as connection:
-        await connection.execute(
-            text("SELECT 1")
-        )
-
-    logger.info("PostgreSQL connected")
-
-
-async def check_redis() -> None:
     await redis.ping()
 
-    logger.info("Redis connected")
 
+async def main():
 
-async def main() -> None:
+    logger.info("Bot starting...")
 
-    logger.info("Starting bot...")
+    # 🔥 ВАЖНО: авто-миграции
+    run_migrations()
 
-    await check_postgres()
-    await check_redis()
+    await check_services()
 
     dp = Dispatcher()
 
