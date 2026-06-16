@@ -2,6 +2,7 @@ import aiosqlite
 from config import DB_NAME
 
 
+# ================= INIT =================
 async def init_db():
     async with aiosqlite.connect(DB_NAME) as db:
 
@@ -34,16 +35,17 @@ async def init_db():
         """)
 
         await db.execute("""
-        CREATE TABLE IF NOT EXISTS fraud_log (
-            user_id INTEGER,
-            reason TEXT
+        CREATE TABLE IF NOT EXISTS pending_actions (
+            admin_id INTEGER,
+            action TEXT,
+            target_id INTEGER
         )
         """)
 
         await db.commit()
 
 
-# USERS
+# ================= USERS =================
 async def add_user(uid):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("INSERT OR IGNORE INTO users VALUES (?)", (uid,))
@@ -56,7 +58,7 @@ async def users_count():
         return (await cur.fetchone())[0]
 
 
-# STATS
+# ================= STATS =================
 async def add_stat(key):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("""
@@ -74,7 +76,7 @@ async def get_stat(key):
         return r[0] if r else 0
 
 
-# CODES
+# ================= CODES =================
 async def add_code(code, content):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("INSERT OR REPLACE INTO codes VALUES (?,?)", (code, content))
@@ -87,13 +89,19 @@ async def get_code(code):
         return await cur.fetchone()
 
 
+async def get_codes():
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT code FROM codes")
+        return await cur.fetchall()
+
+
 async def delete_code(code):
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("DELETE FROM codes WHERE code=?", (code,))
         await db.commit()
 
 
-# REF SYSTEM
+# ================= REF =================
 async def set_ref(user_id, code):
     async with aiosqlite.connect(DB_NAME) as db:
 
@@ -134,7 +142,10 @@ async def add_invites(user_id, amount):
         row = await cur.fetchone()
 
         if not row:
-            await db.execute("INSERT INTO referrals VALUES (?,?,?)", (user_id, "ADMIN", amount))
+            await db.execute(
+                "INSERT INTO referrals VALUES (?,?,?)",
+                (user_id, "ADMIN", amount)
+            )
         else:
             await db.execute(
                 "UPDATE referrals SET invites = invites + ? WHERE user_id=?",
@@ -146,21 +157,33 @@ async def add_invites(user_id, amount):
 
 async def remove_invites(user_id, amount):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "UPDATE referrals SET invites = MAX(invites - ?, 0) WHERE user_id=?",
-            (amount, user_id)
-        )
+        await db.execute("""
+        UPDATE referrals 
+        SET invites = MAX(invites - ?, 0)
+        WHERE user_id=?
+        """, (amount, user_id))
         await db.commit()
 
 
-async def all_refs():
+# ================= ADMIN ACTIONS =================
+async def set_pending(admin_id, action, target_id=None):
     async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT * FROM referrals")
-        return await cur.fetchall()
+        await db.execute("""
+        INSERT OR REPLACE INTO pending_actions VALUES (?,?,?)
+        """, (admin_id, action, target_id))
+        await db.commit()
 
 
-# FRAUD LOG
-async def fraud(uid, reason):
+async def get_pending(admin_id):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("INSERT INTO fraud_log VALUES (?,?)", (uid, reason))
+        cur = await db.execute(
+            "SELECT action, target_id FROM pending_actions WHERE admin_id=?",
+            (admin_id,)
+        )
+        return await cur.fetchone()
+
+
+async def clear_pending(admin_id):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("DELETE FROM pending_actions WHERE admin_id=?", (admin_id,))
         await db.commit()
