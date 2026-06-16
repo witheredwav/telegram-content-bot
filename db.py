@@ -20,7 +20,6 @@ async def init_db():
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS stats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
             action TEXT
         )
         """)
@@ -88,10 +87,16 @@ async def codes_count():
         return (await cur.fetchone())[0]
 
 
+async def get_all_codes():
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT code FROM codes")
+        return await cur.fetchall()
+
+
 # STATS
 async def add_stat(action):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("INSERT INTO stats(action) VALUES (?)", (action,))
+        await db.execute("INSERT INTO stats VALUES (?)", (action,))
         await db.commit()
 
 
