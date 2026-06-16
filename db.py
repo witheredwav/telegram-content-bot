@@ -7,7 +7,6 @@ async def init():
     async with aiosqlite.connect(DB) as db:
         await db.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
             tg_id INTEGER UNIQUE
         )
         """)
@@ -23,11 +22,10 @@ async def init():
         await db.commit()
 
 
-# ================= USERS =================
 async def add_user(tg_id):
     async with aiosqlite.connect(DB) as db:
         await db.execute(
-            "INSERT OR IGNORE INTO users (tg_id) VALUES (?)",
+            "INSERT OR IGNORE INTO users VALUES (?)",
             (tg_id,)
         )
         await db.commit()
@@ -39,7 +37,6 @@ async def users_count():
         return (await cur.fetchone())[0]
 
 
-# ================= CODES =================
 async def add_code(code, type_, content):
     async with aiosqlite.connect(DB) as db:
         await db.execute(
@@ -64,8 +61,14 @@ async def codes_count():
         return (await cur.fetchone())[0]
 
 
-# 🔥 НОВОЕ: все коды
 async def get_all_codes():
     async with aiosqlite.connect(DB) as db:
         cur = await db.execute("SELECT code FROM codes")
         return await cur.fetchall()
+
+
+async def delete_code_db(code):
+    async with aiosqlite.connect(DB) as db:
+        cur = await db.execute("DELETE FROM codes WHERE code=?", (code,))
+        await db.commit()
+        return cur.rowcount
