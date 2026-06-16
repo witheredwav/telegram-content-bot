@@ -1,24 +1,21 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
+# ================= START MENU =================
 def start_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Подписаться", url="https://t.me/YOUR_CHANNEL")],
-        [InlineKeyboardButton(text="✅ Проверить", callback_data="check")]
+        [InlineKeyboardButton(text="📂 Примеры работ", callback_data="portfolio")],
+        [InlineKeyboardButton(text="🔑 Ввести код", callback_data="code")],
+        [InlineKeyboardButton(text="👥 Рефералы", callback_data="ref")],
+        [InlineKeyboardButton(text="✅ Проверить подписку", callback_data="check")]
     ])
 
 
-def menu_kb():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👥 Рефералка", callback_data="ref")],
-        [InlineKeyboardButton(text="🔑 Ввести код", callback_data="code")]
-    ])
-
-
+# ================= ADMIN MENU =================
 def admin_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")],
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="stats")],
         [InlineKeyboardButton(text="📦 Коды", callback_data="admin_codes")],
         [InlineKeyboardButton(text="👥 Рефералы", callback_data="admin_refs")],
-        [InlineKeyboardButton(text="🎲 Создать код", callback_data="admin_create")]
+        [InlineKeyboardButton(text="➕ Выдать рефералы", callback_data="admin_add_refs")]
     ])
