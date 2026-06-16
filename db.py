@@ -19,9 +19,17 @@ async def init():
         )
         """)
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS stats (
+            key TEXT PRIMARY KEY,
+            value INTEGER
+        )
+        """)
+
         await db.commit()
 
 
+# -------- USERS --------
 async def add_user(tg_id):
     async with aiosqlite.connect(DB) as db:
         await db.execute("INSERT OR IGNORE INTO users VALUES (?)", (tg_id,))
@@ -34,6 +42,24 @@ async def users_count():
         return (await cur.fetchone())[0]
 
 
+# -------- STATS --------
+async def add_stat(key):
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+        INSERT INTO stats(key, value)
+        VALUES(?, 1)
+        ON CONFLICT(key) DO UPDATE SET value = value + 1
+        """, (key,))
+        await db.commit()
+
+
+async def get_stats():
+    async with aiosqlite.connect(DB) as db:
+        cur = await db.execute("SELECT key, value FROM stats")
+        return await cur.fetchall()
+
+
+# -------- CODES --------
 async def add_code(code, type_, content):
     async with aiosqlite.connect(DB) as db:
         await db.execute(
