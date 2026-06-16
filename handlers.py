@@ -1,174 +1,165 @@
 import time
-
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.enums import ChatMemberStatus
 
 from config import ADMIN_ID, CHANNEL_USERNAME
 from db import *
-from keyboards import start_kb, admin_kb
 
 router = Router()
 
 pending = {}
-pending_ref_state = {}
+ref_state = {}
 last_action = {}
 
 
 # ================= START =================
-@router.message(F.text.startswith("/start"))
+@router.message(F.text == "/start")
 async def start(msg: Message):
 
     await add_user(msg.from_user.id)
-    await add_event(msg.from_user.id, "start")
+    await add_stat("start")
 
     await msg.answer(
-        "👋 Добро пожаловать в систему\n\n👇 Выберите действие:",
-        reply_markup=start_kb()
+        "👋 Добро пожаловать"
     )
 
 
-# ================= CHECK SUB =================
-@router.callback_query(F.data == "check")
-async def check(cb: CallbackQuery):
-
-    member = await cb.bot.get_chat_member(
-        f"@{CHANNEL_USERNAME}",
-        cb.from_user.id
-    )
-
-    if member.status not in [
-        ChatMemberStatus.MEMBER,
-        ChatMemberStatus.ADMINISTRATOR,
-        ChatMemberStatus.CREATOR
-    ]:
-        await cb.message.answer("❌ Нет подписки")
-        return
-
-    await cb.message.answer("✅ Доступ открыт")
-
-
-# ================= PORTFOLIO =================
-@router.callback_query(F.data == "portfolio")
-async def portfolio(cb: CallbackQuery):
-    await add_event(cb.from_user.id, "portfolio")
-    await cb.message.answer("📂 Примеры работ...")
-
-
-# ================= CODE INPUT =================
-@router.message(F.text.regexp(r"^\d{5}$"))
-async def code_input(msg: Message):
-
-    data = await get_code(msg.text)
-
-    if not data:
-        await msg.answer("❌ Неверный код")
-        return
-
-    await msg.answer(f"📦 Контент:\n\n{data[1]}")
-
-
-# ================= REF BUTTON =================
-@router.callback_query(F.data == "ref")
-async def ref(cb: CallbackQuery):
-
-    pending_ref_state[cb.from_user.id] = True
-
-    await cb.message.answer("👥 Введите реферальный код:")
-
-
-# ================= REF INPUT + ANTI SPAM =================
+# ================= REF INPUT =================
 @router.message()
-async def all_messages(msg: Message):
+async def messages(msg: Message):
 
-    # ================= REF SYSTEM =================
-    if pending_ref_state.get(msg.from_user.id):
+    uid = msg.from_user.id
 
-        now = time.time()
+    # ================= ANTI SPAM =================
+    now = time.time()
+    if uid in last_action:
+        if now - last_action[uid] < 3:
+            await fraud(uid, "spam")
+            return
 
-        if msg.from_user.id in last_action:
-            if now - last_action[msg.from_user.id] < 3:
-                await msg.answer("⛔ Слишком быстро")
-                return
+    last_action[uid] = now
 
-        last_action[msg.from_user.id] = now
+
+    # ================= REF FLOW =================
+    if ref_state.get(uid):
 
         code = msg.text.strip()
 
-        ok = await add_ref_if_valid(msg.from_user.id, code)
+        ok = await set_ref(uid, code)
 
         if not ok:
-            await msg.answer("❌ Реферал не засчитан")
-            pending_ref_state.pop(msg.from_user.id, None)
+            await msg.answer("❌ Ошибка реферала")
+            await fraud(uid, "invalid_ref")
+            ref_state.pop(uid, None)
             return
 
-        percent = await update_ref_level(msg.from_user.id)
-
-        await msg.answer(f"🎉 Реферал засчитан\n💰 Скидка: {percent}%")
-
-        pending_ref_state.pop(msg.from_user.id, None)
+        await msg.answer("🎉 Реферал засчитан")
+        ref_state.pop(uid, None)
         return
 
 
-    # ================= ADMIN REF ADD =================
-    if msg.from_user.id in pending:
+    # ================= ADMIN REF CONTROL =================
+    if uid in pending:
 
-        data = pending[msg.from_user.id]
+        data = pending[uid]
 
-        if data == "wait_user":
-            pending[msg.from_user.id] = {
-                "step": "wait_amount",
-                "user_id": int(msg.text)
-            }
-
-            await msg.answer("➕ Сколько рефералов выдать?")
-            return
-
-        if isinstance(data, dict) and data.get("step") == "wait_amount":
-
-            user_id = data["user_id"]
+        # ADD
+        if data["action"] == "add":
+            target = data["user_id"]
             amount = int(msg.text)
 
-            await add_invites(user_id, amount)
+            await add_invites(target, amount)
 
-            percent = await update_ref_level(user_id)
+            await msg.answer(f"✅ +{amount} рефералов пользователю {target}")
+            pending.pop(uid, None)
+            return
 
-            pending.pop(msg.from_user.id, None)
+        # REMOVE
+        if data["action"] == "remove":
+            target = data["user_id"]
+            amount = int(msg.text)
 
-            await msg.answer(
-                f"✅ Выдано {amount} рефералов\n"
-                f"👤 User: {user_id}\n"
-                f"💰 Скидка: {percent}%"
-            )
+            await remove_invites(target, amount)
 
+            await msg.answer(f"❌ -{amount} рефералов пользователю {target}")
+            pending.pop(uid, None)
+            return
+
+        # CREATE CODE
+        if data["action"] == "code":
+            await add_code(msg.text, "content")
+            pending.pop(uid, None)
+            await msg.answer("✅ код создан")
             return
 
 
-# ================= ADMIN PANEL =================
+# ================= ADMIN =================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
 
     if msg.from_user.id != ADMIN_ID:
         return
 
-    await msg.answer("👑 ADMIN PANEL", reply_markup=admin_kb())
+    await msg.answer("👑 ADMIN PANEL")
+
+
+# ================= ADD REF =================
+@router.message(F.text.startswith("/addref"))
+async def addref(msg: Message):
+
+    if msg.from_user.id != ADMIN_ID:
+        return
+
+    _, uid = msg.text.split()
+    pending[msg.from_user.id] = {"action": "add", "user_id": int(uid)}
+
+    await msg.answer("➕ сколько добавить?")
+
+
+# ================= REMOVE REF =================
+@router.message(F.text.startswith("/removeref"))
+async def removeref(msg: Message):
+
+    if msg.from_user.id != ADMIN_ID:
+        return
+
+    _, uid = msg.text.split()
+    pending[msg.from_user.id] = {"action": "remove", "user_id": int(uid)}
+
+    await msg.answer("➖ сколько убрать?")
+
+
+# ================= REF BUTTON =================
+@router.message(F.text == "/ref")
+async def ref(msg: Message):
+
+    ref_state[msg.from_user.id] = True
+    await msg.answer("👥 Введите реф код")
+
+
+# ================= CREATE CODE =================
+@router.message(F.text == "/createcode")
+async def createcode(msg: Message):
+
+    if msg.from_user.id != ADMIN_ID:
+        return
+
+    pending[msg.from_user.id] = {"action": "code"}
+    await msg.answer("🔑 введите код")
 
 
 # ================= STATS =================
-@router.callback_query(F.data == "stats")
-async def stats(cb: CallbackQuery):
+@router.message(F.text == "/stats")
+async def stats(msg: Message):
 
-    await cb.message.answer(
-        f"📊 STATISTICS\n\n"
-        f"👤 Users: {await users_count()}\n"
-        f"📦 Codes: {await codes_count()}"
+    if msg.from_user.id != ADMIN_ID:
+        return
+
+    await msg.answer(
+        f"""
+📊 STATS
+Start: {await get_stat("start")}
+Users: {await users_count()}
+"""
     )
-
-
-# ================= ADMIN ADD REF =================
-@router.callback_query(F.data == "admin_add_refs")
-async def admin_add_refs(cb: CallbackQuery):
-
-    pending[cb.from_user.id] = "wait_user"
-
-    await cb.message.answer("👤 Введите ID пользователя:")
