@@ -13,20 +13,20 @@ router = Router()
 @router.callback_query(F.data == "enter_code")
 async def enter_code(callback: CallbackQuery, state: FSMContext):
 
-```
+
 await state.set_state(UserStates.waiting_for_code)
 
 await callback.message.answer("🔑 Введите 5-значный код:")
 
 await callback.answer()
-```
+
 
 # Обработка введённого кода
 
 @router.message(UserStates.waiting_for_code)
 async def check_code(message: Message, state: FSMContext):
 
-```
+
 code = message.text.strip()
 
 # проверка формата
@@ -68,4 +68,4 @@ else:
 
 # сбрасываем состояние
 await state.clear()
-```
+
