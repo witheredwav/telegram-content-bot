@@ -28,7 +28,7 @@ async def start(msg: Message):
     await add_user(msg.from_user.id)
 
     await msg.answer(
-        "👋 Привет!\n\nПодпишись на канал 👇",
+        "👋 Привет!\nПодпишись на канал 👇",
         reply_markup=start_kb()
     )
 
@@ -61,7 +61,7 @@ async def check(cb: CallbackQuery):
 # ================= ENTER CODE =================
 @router.callback_query(F.data == "code")
 async def enter_code(cb: CallbackQuery):
-    await cb.message.answer("🔑 Введите код:")
+    await cb.message.answer("🔑 Введите 5-значный код")
     await cb.answer()
 
 
@@ -91,7 +91,7 @@ async def check_code(msg: Message):
         await msg.answer_document(document=content)
 
 
-# ================= ADMIN =================
+# ================= ADMIN MENU =================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
 
@@ -117,12 +117,17 @@ async def create_code(msg: Message):
     code = str(random.randint(0, 99999)).zfill(5)
     pending_code[msg.from_user.id] = code
 
-    await msg.answer(f"🎲 Код: {code}\nОтправь контент")
+    await msg.answer(
+        f"🎲 Код: {code}\nОтправь контент"
+    )
 
 
-# ================= SAVE CONTENT =================
-@router.message(F.from_user.id == ADMIN_ID)
+# ================= SAVE CONTENT (FIXED SAFE) =================
+@router.message()
 async def save_content(msg: Message):
+
+    if msg.from_user.id != ADMIN_ID:
+        return
 
     code = pending_code.get(msg.from_user.id)
     if not code:
@@ -138,6 +143,8 @@ async def save_content(msg: Message):
         await add_code(code, "document", msg.document.file_id)
 
     elif msg.text:
+        if msg.text.startswith("/"):
+            return
         await add_code(code, "text", msg.text)
 
     pending_code.pop(msg.from_user.id)
@@ -145,7 +152,7 @@ async def save_content(msg: Message):
     await msg.answer(f"✅ Код {code} сохранён")
 
 
-# ================= DELETE CODE (FIXED) =================
+# ================= DELETE CODE =================
 @router.message(F.text.startswith("/delete_code"))
 async def delete_code(msg: Message):
 
@@ -155,7 +162,7 @@ async def delete_code(msg: Message):
     parts = msg.text.split()
 
     if len(parts) < 2:
-        await msg.answer("❌ Используй: /delete_code 12345")
+        await msg.answer("❌ /delete_code 12345")
         return
 
     code = parts[1]
@@ -165,10 +172,10 @@ async def delete_code(msg: Message):
     if result == 0:
         await msg.answer("❌ Код не найден")
     else:
-        await msg.answer(f"🗑 Код {code} удалён успешно")
+        await msg.answer("🗑 Код удалён")
 
 
-# ================= STATS (FIXED) =================
+# ================= STATS =================
 @router.message(F.text == "/stats")
 async def stats(msg: Message):
 
@@ -185,7 +192,7 @@ async def stats(msg: Message):
     )
 
 
-# ================= ALL CODES =================
+# ================= CODES =================
 @router.message(F.text == "/codes")
 async def codes(msg: Message):
 
