@@ -5,82 +5,38 @@ from config import CHANNEL_LINK, PORTFOLIO_LINK
 # ================= START =================
 def start_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="🔗 Подписаться",
-                url=CHANNEL_LINK
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="✅ Проверить подписку",
-                callback_data="check"
-            )
-        ]
+        [InlineKeyboardButton("🔗 Подписаться", url=CHANNEL_LINK)],
+        [InlineKeyboardButton("✅ Проверить подписку", callback_data="check")]
     ])
 
 
-# ================= MAIN MENU =================
+# ================= MAIN =================
 def main_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="📂 Примеры работ",
-                url=PORTFOLIO_LINK
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="🔑 Ввести код",
-                callback_data="code"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="👥 Рефералы",
-                callback_data="ref"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="📊 Моя статистика",
-                callback_data="mystats"
-            )
-        ]
+        [InlineKeyboardButton("📂 Примеры работ", url=PORTFOLIO_LINK)],
+        [InlineKeyboardButton("🔑 Ввести реф код", callback_data="enter_ref")],
+        [InlineKeyboardButton("👥 Рефералы", callback_data="ref_menu")]
     ])
 
 
-# ================= ADMIN PANEL =================
+# ================= REF MENU =================
+def ref_kb(has_code: bool):
+    kb = []
+
+    if not has_code:
+        kb.append([InlineKeyboardButton("➕ Создать реф код", callback_data="create_ref")])
+
+    kb.append([InlineKeyboardButton("📋 Мой код", callback_data="my_ref")])
+
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+
+# ================= ADMIN =================
 def admin_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="➕ Создать код",
-                callback_data="admin_create_code"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="📦 Список кодов",
-                callback_data="admin_codes"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="👥 Выдать рефералы",
-                callback_data="admin_add_refs"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="👥 Забрать рефералы",
-                callback_data="admin_remove_refs"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="📊 Статистика",
-                callback_data="admin_stats"
-            )
-        ]
+        [InlineKeyboardButton("➕ Код", callback_data="admin_add_code")],
+        [InlineKeyboardButton("📦 Коды", callback_data="admin_codes")],
+        [InlineKeyboardButton("❌ Удалить код", callback_data="admin_delete_code")],
+        [InlineKeyboardButton("👥 Рефералы", callback_data="admin_refs")],
+        [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")]
     ])
