@@ -13,31 +13,20 @@ from handlers import router
 
 async def main():
 
-    # ================= LOGGING =================
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO)
 
-    # ================= BOT =================
     bot = Bot(
         token=BOT_TOKEN,
-        default=DefaultBotProperties(
-            parse_mode=ParseMode.HTML
-        )
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
 
-    # ================= DISPATCHER =================
     dp = Dispatcher(storage=MemoryStorage())
-
     dp.include_router(router)
 
-    # ================= DB INIT =================
     await init_db()
 
-    print("✅ BOT STARTED SUCCESSFULLY")
+    print("BOT STARTED")
 
-    # ================= START POLLING =================
     await dp.start_polling(bot)
 
 
