@@ -45,6 +45,7 @@ conn.commit()
 
 # ---------------- STATE ----------------
 user_state = {}
+admin_temp = {}
 
 # ---------------- STATS ----------------
 def stat(key):
@@ -53,17 +54,10 @@ def stat(key):
     conn.commit()
 
 # ---------------- KEYBOARDS ----------------
-
-# ЭКРАН 1 (подписка)
-def sub_kb():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔔 Подписаться", url=CHANNEL_LINK)],
-        [InlineKeyboardButton(text="✅ Проверить подписку", callback_data="check")]
-    ])
-
-# ЭКРАН 2 (основное меню)
 def main_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔔 Подписаться", url=CHANNEL_LINK)],
+        [InlineKeyboardButton(text="✅ Проверить подписку", callback_data="check")],
         [InlineKeyboardButton(text="🎧 Примеры работ", url=WORKS_CHANNEL_LINK)],
         [InlineKeyboardButton(text="💬 Заказать сведение", url=DM_LINK)],
         [InlineKeyboardButton(text="🔑 Ввести ключ", callback_data="enter_code")]
@@ -74,11 +68,26 @@ def cancel_kb():
         [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")]
     ])
 
+def admin_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")],
+        [InlineKeyboardButton(text="➕ Создать код", callback_data="admin_create")],
+        [InlineKeyboardButton(text="📦 Коды", callback_data="admin_codes")]
+    ])
+
 # ---------------- START ----------------
 @dp.message(Command("start"))
 async def start(m: Message):
     stat("start")
-    await m.answer("👋 Сначала подпишись:", reply_markup=sub_kb())
+    await m.answer("👋 Главное меню:", reply_markup=main_kb())
+
+# ---------------- ADMIN (ВАЖНО ИСПРАВЛЕНО) ----------------
+@dp.message(Command("admin"))
+async def admin(m: Message):
+    if m.from_user.id != ADMIN_ID:
+        return
+
+    await m.answer("⚙️ Админ панель:", reply_markup=admin_kb())
 
 # ---------------- CHECK SUB ----------------
 @dp.callback_query(F.data == "check")
@@ -90,7 +99,6 @@ async def check(c: CallbackQuery):
 
         if member.status in ["member", "administrator", "creator"]:
             await c.message.answer("✅ Подписка подтверждена")
-            await c.message.answer("👇 Теперь доступно меню:", reply_markup=main_kb())
         else:
             await c.message.answer("❌ Ты не подписан")
     except:
@@ -102,7 +110,6 @@ async def check(c: CallbackQuery):
 @dp.callback_query(F.data == "enter_code")
 async def enter_code(c: CallbackQuery):
     user_state[c.from_user.id] = "waiting_code"
-
     await c.message.answer("🔑 Введи код:", reply_markup=cancel_kb())
     await c.answer()
 
@@ -110,11 +117,10 @@ async def enter_code(c: CallbackQuery):
 @dp.callback_query(F.data == "cancel")
 async def cancel(c: CallbackQuery):
     user_state.pop(c.from_user.id, None)
-
     await c.message.answer("❌ Отменено")
     await c.answer()
 
-# ---------------- CODE LOGIC ----------------
+# ---------------- CODE CHECK ----------------
 @dp.message()
 async def handle(m: Message):
     uid = m.from_user.id
@@ -134,17 +140,24 @@ async def handle(m: Message):
     else:
         await m.answer("❌ Неверный код")
 
-# ---------------- ADMIN (без изменений логики) ----------------
-admin_temp = {}
-
-@dp.message(Command("admin"))
-async def admin(m: Message):
-    if m.from_user.id != ADMIN_ID:
+# ---------------- ADMIN CALLBACKS ----------------
+@dp.callback_query(F.data == "admin_stats")
+async def stats(c: CallbackQuery):
+    if c.from_user.id != ADMIN_ID:
         return
-    await m.answer("⚙️ Админ режим включен")
+
+    cur.execute("SELECT * FROM stats")
+    data = cur.fetchall()
+
+    msg = "📊 СТАТИСТИКА:\n\n"
+    for k, v in data:
+        msg += f"{k}: {v}\n"
+
+    await c.message.answer(msg)
+    await c.answer()
 
 @dp.callback_query(F.data == "admin_create")
-async def create_code(c: CallbackQuery):
+async def create(c: CallbackQuery):
     if c.from_user.id != ADMIN_ID:
         return
 
@@ -154,6 +167,20 @@ async def create_code(c: CallbackQuery):
     await c.message.answer(f"➕ Код: {code}\nОтправь контент")
     await c.answer()
 
+@dp.callback_query(F.data == "admin_codes")
+async def codes(c: CallbackQuery):
+    if c.from_user.id != ADMIN_ID:
+        return
+
+    cur.execute("SELECT code FROM codes")
+    rows = cur.fetchall()
+
+    text = "📦 КОДЫ:\n\n" + "\n".join([r[0] for r in rows])
+
+    await c.message.answer(text)
+    await c.answer()
+
+# ---------------- SAVE ADMIN CONTENT ----------------
 @dp.message()
 async def save_admin(m: Message):
     if m.from_user.id != ADMIN_ID:
