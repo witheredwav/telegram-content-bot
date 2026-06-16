@@ -61,12 +61,6 @@ async def get_code(code):
         return await cur.fetchone()
 
 
-async def get_all_codes():
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT code FROM codes")
-        return await cur.fetchall()
-
-
 async def get_all_codes_full():
     async with aiosqlite.connect(DB_NAME) as db:
         cur = await db.execute("SELECT code, content FROM codes")
@@ -98,7 +92,43 @@ async def get_stat(action):
         return (await cur.fetchone())[0]
 
 
-# REFERRALS
+# REF SYSTEM (АНТИКРУТКА ВСТРОЕНА)
+async def add_ref_if_valid(user_id: int, code: str):
+    async with aiosqlite.connect(DB_NAME) as db:
+
+        # уже есть реферал
+        cur = await db.execute(
+            "SELECT 1 FROM referrals WHERE user_id=?",
+            (user_id,)
+        )
+        if await cur.fetchone():
+            return False
+
+        # защита от саморефа
+        cur = await db.execute(
+            "SELECT user_id FROM referrals WHERE code=?",
+            (code,)
+        )
+        owner = await cur.fetchone()
+
+        if owner and owner[0] == user_id:
+            return False
+
+        # записываем
+        await db.execute(
+            "INSERT INTO referrals(user_id, code, invites) VALUES (?,?,0)",
+            (user_id, code)
+        )
+
+        await db.execute(
+            "UPDATE referrals SET invites = invites + 1 WHERE code=?",
+            (code,)
+        )
+
+        await db.commit()
+        return True
+
+
 async def get_all_refs():
     async with aiosqlite.connect(DB_NAME) as db:
         cur = await db.execute("SELECT user_id, code, invites FROM referrals")
@@ -107,5 +137,17 @@ async def get_all_refs():
 
 async def reset_ref(user_id):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("UPDATE referrals SET invites=0 WHERE user_id=?", (user_id,))
+        await db.execute(
+            "UPDATE referrals SET invites=0 WHERE user_id=?",
+            (user_id,)
+        )
+        await db.commit()
+
+
+async def delete_ref(user_id):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute(
+            "DELETE FROM referrals WHERE user_id=?",
+            (user_id,)
+        )
         await db.commit()
