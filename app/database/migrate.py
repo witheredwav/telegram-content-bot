@@ -3,11 +3,11 @@ from app.database.session import engine, Base
 
 async def run_migrations():
     """
-    Простая авто-инициализация таблиц без Alembic
-    (для запуска на Railway новичку)
+    Простое создание таблиц без Alembic
+    Работает с SQLAlchemy async правильно
     """
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    print("Database initialized successfully")
+    print("Database tables created successfully")
