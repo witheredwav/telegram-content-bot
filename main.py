@@ -1,16 +1,15 @@
 import asyncio
 import json
 import random
-import string
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.fsm.storage.memory import MemoryStorage
 
 
-# =========================
+# ======================
 # 🔐 НАСТРОЙКИ
-# =========================
+# ======================
 
 BOT_TOKEN = "8586166190:AAHOAcP29AYDThbBn5TN60ZeP7RQfhfeEe8"
 CHANNEL_ID = "@witheredoff"
@@ -21,9 +20,9 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 
-# =========================
+# ======================
 # 📦 БАЗА КОДОВ
-# =========================
+# ======================
 
 def load_codes():
     try:
@@ -39,20 +38,20 @@ def save_codes(data):
 codes = load_codes()
 
 
-# =========================
-# 🎲 ГЕНЕРАТОР КОДОВ
-# =========================
+# ======================
+# 🎲 5-ЗНАЧНЫЙ КОД
+# ======================
 
-def generate_code(length=6):
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
-
-
-pending = {}  # временно хранит код для админа
+def generate_code():
+    return str(random.randint(10000, 99999))
 
 
-# =========================
+pending = {}  # временное хранение для админа
+
+
+# ======================
 # 🔐 ПОДПИСКА
-# =========================
+# ======================
 
 async def is_subscribed(user_id: int):
     try:
@@ -62,17 +61,17 @@ async def is_subscribed(user_id: int):
         return False
 
 
-# =========================
-# 👑 АДМИН ПРОВЕРКА
-# =========================
+# ======================
+# 👑 АДМИН
+# ======================
 
 def is_admin(user_id: int):
     return user_id == ADMIN_ID
 
 
-# =========================
+# ======================
 # 📌 /start
-# =========================
+# ======================
 
 @dp.message(CommandStart())
 async def start(message: types.Message):
@@ -93,12 +92,12 @@ async def start(message: types.Message):
         await message.answer("❌ Подпишись на канал и нажми /start снова")
         return
 
-    await message.answer("🔑 Введи код из поста")
+    await message.answer("🔑 Введи 5-значный код")
 
 
-# =========================
-# 🎲 СГЕНЕРИРОВАТЬ КОД
-# =========================
+# ======================
+# 🎲 ГЕНЕРАЦИЯ КОДА
+# ======================
 
 @dp.message(F.text == "🎲 Сгенерировать код")
 async def gen_code(message: types.Message):
@@ -110,15 +109,15 @@ async def gen_code(message: types.Message):
     pending[message.from_user.id] = code
 
     await message.answer(
-        f"🎲 Код создан: {code}\n\n"
+        f"🎲 Код: {code}\n\n"
         "Теперь отправь:\n"
         "📄 текст / 🔗 ссылку / 📁 файл"
     )
 
 
-# =========================
+# ======================
 # 📋 СПИСОК КОДОВ
-# =========================
+# ======================
 
 @dp.message(F.text == "📋 Коды")
 async def list_codes(message: types.Message):
@@ -137,12 +136,12 @@ async def list_codes(message: types.Message):
     await message.answer(text)
 
 
-# =========================
-# 📥 ЗАПИСЬ ДАННЫХ ОТ АДМИНА
-# =========================
+# ======================
+# 📥 ПРИЁМ ОТ АДМИНА
+# ======================
 
 @dp.message()
-async def admin_capture(message: types.Message):
+async def admin_input(message: types.Message):
 
     user_id = message.from_user.id
 
@@ -156,10 +155,12 @@ async def admin_capture(message: types.Message):
         type_ = "file"
     else:
         text = message.text
+
         if text.startswith("http"):
             type_ = "link"
         else:
             type_ = "text"
+
         value = text
 
     codes[code] = {
@@ -174,12 +175,12 @@ async def admin_capture(message: types.Message):
     await message.answer(f"✅ Код {code} сохранён!")
 
 
-# =========================
-# 🔑 ОБЫЧНЫЕ ПОЛЬЗОВАТЕЛИ
-# =========================
+# ======================
+# 👤 ПОЛЬЗОВАТЕЛИ
+# ======================
 
 @dp.message()
-async def user_codes(message: types.Message):
+async def user_handler(message: types.Message):
 
     if is_admin(message.from_user.id):
         return
@@ -206,9 +207,9 @@ async def user_codes(message: types.Message):
         await message.answer_document(data["value"])
 
 
-# =========================
+# ======================
 # 🚀 ЗАПУСК
-# =========================
+# ======================
 
 async def main():
     await dp.start_polling(bot)
