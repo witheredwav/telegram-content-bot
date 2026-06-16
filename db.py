@@ -62,3 +62,10 @@ async def codes_count():
     async with aiosqlite.connect(DB) as db:
         cur = await db.execute("SELECT COUNT(*) FROM codes")
         return (await cur.fetchone())[0]
+
+
+# 🔥 НОВОЕ: все коды
+async def get_all_codes():
+    async with aiosqlite.connect(DB) as db:
+        cur = await db.execute("SELECT code FROM codes")
+        return await cur.fetchall()
