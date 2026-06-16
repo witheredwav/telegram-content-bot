@@ -5,7 +5,7 @@ from config import CHANNEL_LINK, WORKS_LINK
 def start_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📢 Подписаться", url=CHANNEL_LINK)],
-        [InlineKeyboardButton(text="✅ Проверить", callback_data="check")]
+        [InlineKeyboardButton(text="✅ Проверить подписку", callback_data="check")]
     ])
 
 
