@@ -1,5 +1,9 @@
 import asyncio
+import logging
+
 from aiogram import Bot, Dispatcher
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import BOT_TOKEN
 from db import init_db
@@ -7,14 +11,22 @@ from handlers import router
 
 
 async def main():
-    bot = Bot(BOT_TOKEN)
-    dp = Dispatcher()
+
+    logging.basicConfig(level=logging.INFO)
+
+    bot = Bot(
+        token=BOT_TOKEN,
+        parse_mode=ParseMode.HTML
+    )
+
+    dp = Dispatcher(storage=MemoryStorage())
 
     dp.include_router(router)
 
     await init_db()
 
     print("BOT STARTED")
+
     await dp.start_polling(bot)
 
 
