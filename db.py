@@ -7,12 +7,15 @@ conn = sqlite3.connect(
 
 cursor = conn.cursor()
 
-# ======================
-# КОДЫ
-# ======================
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users(
+    user_id INTEGER PRIMARY KEY,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+""")
 
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS codes (
+CREATE TABLE IF NOT EXISTS codes(
     code TEXT PRIMARY KEY,
     type TEXT,
     value TEXT,
@@ -20,37 +23,17 @@ CREATE TABLE IF NOT EXISTS codes (
 )
 """)
 
-# ======================
-# ПОЛЬЗОВАТЕЛИ
-# ======================
-
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY,
-    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
-""")
-
-# ======================
-# СТАТИСТИКА
-# ======================
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS stats (
+CREATE TABLE IF NOT EXISTS stats(
     key TEXT PRIMARY KEY,
-    value INTEGER
+    value INTEGER DEFAULT 0
 )
 """)
 
 conn.commit()
 
 
-# ======================
-# USERS
-# ======================
-
 def add_user(user_id):
-
     cursor.execute(
         """
         INSERT OR IGNORE INTO users(user_id)
@@ -58,22 +41,15 @@ def add_user(user_id):
         """,
         (user_id,)
     )
-
     conn.commit()
 
 
 def get_users_count():
-
     cursor.execute(
         "SELECT COUNT(*) FROM users"
     )
-
     return cursor.fetchone()[0]
 
-
-# ======================
-# STATS
-# ======================
 
 def increment_stat(key):
 
@@ -116,10 +92,6 @@ def get_stat(key):
     return 0
 
 
-# ======================
-# CODES
-# ======================
-
 def add_code(
     code,
     type_,
@@ -129,11 +101,16 @@ def add_code(
     cursor.execute(
         """
         INSERT OR REPLACE INTO codes
-        VALUES(
+        (
+            code,
+            type,
+            value
+        )
+        VALUES
+        (
             ?,
             ?,
-            ?,
-            CURRENT_TIMESTAMP
+            ?
         )
         """,
         (
@@ -150,7 +127,7 @@ def get_code(code):
 
     cursor.execute(
         """
-        SELECT type, value
+        SELECT type,value
         FROM codes
         WHERE code=?
         """,
@@ -164,7 +141,7 @@ def get_all_codes():
 
     cursor.execute(
         """
-        SELECT code, type
+        SELECT code,type
         FROM codes
         ORDER BY created_at DESC
         """
