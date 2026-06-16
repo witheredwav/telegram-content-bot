@@ -1,11 +1,12 @@
 import random
+import aiosqlite
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.enums import ChatMemberStatus
 
 from config import CHANNEL_USERNAME, ADMIN_ID
-from db import add_code, get_code, users_count, codes_count
+from db import add_user, add_code, get_code, users_count, codes_count, get_all_codes
 from keyboards import start_kb, menu_kb
 
 router = Router()
@@ -16,8 +17,10 @@ pending_code = {}
 # ================= START =================
 @router.message(F.text == "/start")
 async def start(msg: Message):
+    await add_user(msg.from_user.id)
+
     await msg.answer(
-        "👋 Привет!\n\nПодпишись на канал",
+        "👋 Привет!\n\nПодпишись на канал 👇",
         reply_markup=start_kb()
     )
 
@@ -42,7 +45,7 @@ async def check(cb: CallbackQuery):
             await cb.message.answer("❌ Вы не подписаны")
 
     except:
-        await cb.message.answer("❌ Ошибка проверки")
+        await cb.message.answer("❌ Ошибка проверки подписки")
 
     await cb.answer()
 
@@ -50,17 +53,15 @@ async def check(cb: CallbackQuery):
 # ================= ENTER CODE =================
 @router.callback_query(F.data == "code")
 async def enter_code(cb: CallbackQuery):
-    await cb.message.answer("🔑 Введите код:")
+    await cb.message.answer("🔑 Введите 5-значный код:")
     await cb.answer()
 
 
-# ================= CHECK USER CODE =================
+# ================= CHECK CODE =================
 @router.message(F.text.regexp(r"^\d{5}$"))
 async def check_code(msg: Message):
 
-    code = msg.text.strip()
-
-    data = await get_code(code)
+    data = await get_code(msg.text)
 
     if not data:
         await msg.answer("❌ Неверный код")
@@ -96,7 +97,8 @@ async def admin(msg: Message):
         "👑 АДМИНКА\n\n"
         "/create_code - создать код\n"
         "/delete_code 12345 - удалить код\n"
-        "/stats - статистика"
+        "/stats - статистика\n"
+        "/codes - список кодов"
     )
 
 
@@ -146,7 +148,7 @@ async def save_content(msg: Message):
         content = msg.text
 
     else:
-        await msg.answer("❌ Неизвестный формат")
+        await msg.answer("❌ Неподдерживаемый формат")
         return
 
     await add_code(code, content_type, content)
@@ -156,8 +158,8 @@ async def save_content(msg: Message):
     await msg.answer(f"✅ Код {code} сохранён!")
 
 
-# ================= DELETE CODE =================
-@router.message(F.text.regexp(r"^/delete_code"))
+# ================= DELETE CODE (С СТАТУСОМ) =================
+@router.message(F.text.startswith("/delete_code"))
 async def delete_code(msg: Message):
 
     if msg.from_user.id != ADMIN_ID:
@@ -171,18 +173,18 @@ async def delete_code(msg: Message):
 
     code = parts[1]
 
-    # удаление
-    import aiosqlite
-
     async with aiosqlite.connect("db.sqlite3") as db:
-        await db.execute("DELETE FROM codes WHERE code=?", (code,))
+        cur = await db.execute("DELETE FROM codes WHERE code=?", (code,))
         await db.commit()
 
-    await msg.answer(f"🗑 Код {code} удалён")
+        if cur.rowcount == 0:
+            await msg.answer(f"❌ Код {code} не найден")
+        else:
+            await msg.answer(f"🗑 Код {code} успешно удалён")
 
 
-# ================= STATS FIX =================
-@router.message(F.text.regexp(r"^/stats"))
+# ================= STATS =================
+@router.message(F.text == "/stats")
 async def stats(msg: Message):
 
     if msg.from_user.id != ADMIN_ID:
@@ -196,3 +198,24 @@ async def stats(msg: Message):
         f"👤 Пользователей: {users}\n"
         f"🔑 Кодов: {codes}"
     )
+
+
+# ================= CODES LIST =================
+@router.message(F.text == "/codes")
+async def codes_list(msg: Message):
+
+    if msg.from_user.id != ADMIN_ID:
+        return
+
+    codes = await get_all_codes()
+
+    if not codes:
+        await msg.answer("📭 Кодов нет")
+        return
+
+    text = "📦 ВСЕ КОДЫ:\n\n"
+
+    for c in codes:
+        text += f"🔑 {c[0]}\n"
+
+    await msg.answer(text)
