@@ -1,0 +1,14 @@
+{
+  "48291": {
+    "type": "file",
+    "value": "files/book.pdf"
+  },
+  "11111": {
+    "type": "text",
+    "value": "Вот твой секретный текст 🔥"
+  },
+  "22222": {
+    "type": "link",
+    "value": "https://google.com"
+  }
+}
