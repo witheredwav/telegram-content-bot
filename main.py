@@ -1,27 +1,21 @@
 import asyncio
+from aiogram import Bot, Dispatcher
 
-from app.bot import bot, dp
-from app.utils.logger import logger
+from app.utils.config import settings
+from app.handlers.start import router as start_router
 from app.database.migrate import run_migrations
 
-from app.handlers.start import router as start_router
-from app.handlers.referrals import router as referrals_router
+bot = Bot(token=settings.BOT_TOKEN)
+dp = Dispatcher()
+
+dp.include_router(start_router)
 
 
 async def main():
-    logger.info("Starting bot...")
+    await run_migrations()
 
-    # 🔥 1. миграции (не валят бот если упали)
-    try:
-        await run_migrations()
-    except Exception as e:
-        logger.error(f"Migrations failed: {e}")
+    print("Bot started")
 
-    # 🔥 2. подключаем роутеры
-    dp.include_router(start_router)
-    dp.include_router(referrals_router)
-
-    # 🔥 3. старт бота
     await dp.start_polling(bot)
 
 
