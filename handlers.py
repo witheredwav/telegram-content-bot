@@ -1,5 +1,3 @@
-from db import add_stat
-
 import random
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
@@ -14,13 +12,13 @@ from db import (
     users_count,
     codes_count,
     get_all_codes,
-    delete_code_db
+    delete_code_db,
+    add_stat
 )
 
 from keyboards import start_kb, menu_kb
 
 router = Router()
-
 pending = {}
 
 
@@ -28,6 +26,7 @@ pending = {}
 @router.message(F.text == "/start")
 async def start(msg: Message):
     await add_user(msg.from_user.id)
+    await add_stat("start")
 
     await msg.answer(
         "👋 Привет!\nПодпишись на канал 👇",
@@ -38,6 +37,8 @@ async def start(msg: Message):
 # ================= CHECK SUB =================
 @router.callback_query(F.data == "check")
 async def check(cb: CallbackQuery):
+
+    await add_stat("check_click")
 
     try:
         member = await cb.bot.get_chat_member(
@@ -60,16 +61,20 @@ async def check(cb: CallbackQuery):
     await cb.answer()
 
 
-# ================= CODE INPUT =================
+# ================= CODE BUTTON =================
 @router.callback_query(F.data == "code")
-async def enter_code(cb: CallbackQuery):
+async def code_btn(cb: CallbackQuery):
+    await add_stat("code_click")
+
     await cb.message.answer("🔑 Введите 5-значный код:")
     await cb.answer()
 
 
-# ================= CHECK CODE =================
+# ================= ENTER CODE =================
 @router.message(F.text.regexp(r"^\d{5}$"))
 async def check_code(msg: Message):
+
+    await add_stat("code_enter")
 
     data = await get_code(msg.text)
 
@@ -90,42 +95,47 @@ async def check_code(msg: Message):
         await msg.answer_document(c)
 
 
-# ================= ADMIN MENU BUTTON =================
-def admin_panel_kb():
+# ================= ADMIN PANEL =================
+def admin_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика", callback_data="stats")],
         [InlineKeyboardButton(text="📦 Все коды", callback_data="codes")],
-        [InlineKeyboardButton(text="🗑 Удалить код", callback_data="delete_menu")],
-        [InlineKeyboardButton(text="🎲 Создать код", callback_data="create_code")]
+        [InlineKeyboardButton(text="🗑 Удалить код", callback_data="del_menu")],
+        [InlineKeyboardButton(text="🎲 Создать код", callback_data="create")]
     ])
 
 
-# ================= OPEN ADMIN =================
+# ================= ADMIN OPEN =================
 @router.message(F.text == "/admin")
 async def admin(msg: Message):
 
     if msg.from_user.id != ADMIN_ID:
         return
 
-    await msg.answer("👑 Админ-панель:", reply_markup=admin_panel_kb())
+    await msg.answer("👑 Админ-панель", reply_markup=admin_kb())
 
 
-# ================= STATS BUTTON =================
+# ================= STATS =================
 @router.callback_query(F.data == "stats")
 async def stats(cb: CallbackQuery):
 
     if cb.from_user.id != ADMIN_ID:
         return await cb.answer("нет доступа", show_alert=True)
 
+    await add_stat("admin_stats")
+
     await cb.message.answer(
-        f"👤 Users: {await users_count()}\n"
-        f"🔑 Codes: {await codes_count()}"
+        f"""📊 СТАТИСТИКА
+
+👤 Users: {await users_count()}
+🔑 Codes: {await codes_count()}
+"""
     )
 
     await cb.answer()
 
 
-# ================= SHOW CODES =================
+# ================= ALL CODES =================
 @router.callback_query(F.data == "codes")
 async def codes(cb: CallbackQuery):
 
@@ -135,7 +145,7 @@ async def codes(cb: CallbackQuery):
     data = await get_all_codes()
 
     if not data:
-        await cb.message.answer("нет кодов")
+        await cb.message.answer("📭 Нет кодов")
         return
 
     text = "📦 КОДЫ:\n\n"
@@ -148,31 +158,26 @@ async def codes(cb: CallbackQuery):
 
 
 # ================= DELETE MENU =================
-@router.callback_query(F.data == "delete_menu")
-async def delete_menu(cb: CallbackQuery):
+@router.callback_query(F.data == "del_menu")
+async def del_menu(cb: CallbackQuery):
 
     if cb.from_user.id != ADMIN_ID:
         return await cb.answer("нет доступа", show_alert=True)
 
     data = await get_all_codes()
 
-    if not data:
-        await cb.message.answer("нет кодов")
-        return
-
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=c[0], callback_data=f"del_{c[0]}")]
         for c in data
     ])
 
-    await cb.message.answer("Выбери код для удаления:", reply_markup=kb)
-
+    await cb.message.answer("Выбери код:", reply_markup=kb)
     await cb.answer()
 
 
-# ================= DELETE CODE BUTTON =================
+# ================= DELETE CODE =================
 @router.callback_query(F.data.startswith("del_"))
-async def delete_code(cb: CallbackQuery):
+async def delete(cb: CallbackQuery):
 
     if cb.from_user.id != ADMIN_ID:
         return await cb.answer("нет доступа", show_alert=True)
@@ -180,15 +185,15 @@ async def delete_code(cb: CallbackQuery):
     code = cb.data.replace("del_", "")
 
     await delete_code_db(code)
+    await add_stat("delete_code")
 
-    await cb.message.answer(f"🗑 Код {code} удалён")
-
+    await cb.message.answer(f"🗑 Удалено: {code}")
     await cb.answer()
 
 
 # ================= CREATE CODE =================
-@router.callback_query(F.data == "create_code")
-async def create_code(cb: CallbackQuery):
+@router.callback_query(F.data == "create")
+async def create(cb: CallbackQuery):
 
     if cb.from_user.id != ADMIN_ID:
         return await cb.answer("нет доступа", show_alert=True)
@@ -196,8 +201,7 @@ async def create_code(cb: CallbackQuery):
     code = str(random.randint(0, 99999)).zfill(5)
     pending[cb.from_user.id] = code
 
-    await cb.message.answer(f"🎲 Код: {code}\nТеперь отправь контент")
-
+    await cb.message.answer(f"🎲 Код: {code}\nОтправь контент")
     await cb.answer()
 
 
@@ -214,13 +218,18 @@ async def save(msg: Message):
 
     if msg.photo:
         await add_code(code, "photo", msg.photo[-1].file_id)
+
     elif msg.video:
         await add_code(code, "video", msg.video.file_id)
+
     elif msg.document:
         await add_code(code, "document", msg.document.file_id)
+
     elif msg.text and not msg.text.startswith("/"):
         await add_code(code, "text", msg.text)
 
     pending.pop(msg.from_user.id, None)
+
+    await add_stat("code_created")
 
     await msg.answer("✅ Сохранено")
