@@ -6,9 +6,12 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
+    connect_args={
+        "ssl": False  # Railway иногда ломается без этого
+    }
 )
 
 async_session = async_sessionmaker(
     bind=engine,
-    expire_on_commit=False,
+    expire_on_commit=False
 )
