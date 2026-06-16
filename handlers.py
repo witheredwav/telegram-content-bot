@@ -3,7 +3,8 @@ from aiogram import Router, F, types
 from aiogram.filters import CommandStart
 
 import db
-from config import ADMIN_ID, CHANNEL_ID, EXAMPLES_CHANNEL
+import keyboards as kb
+from config import ADMIN_ID, CHANNEL_ID, LOG_CHAT
 
 router = Router()
 
@@ -16,7 +17,10 @@ def is_admin(user_id):
 
 
 def generate_code():
-    return str(random.randint(10000, 99999))
+    while True:
+        code = str(random.randint(10000, 99999))
+        if not db.get_code(code):
+            return code
 
 
 # ================= START =================
@@ -27,29 +31,12 @@ async def start(message: types.Message):
     db.add_user(message.from_user.id)
 
     if is_admin(message.from_user.id):
-        kb = types.ReplyKeyboardMarkup(
-            keyboard=[
-                [types.KeyboardButton(text="🎲 Новый код")],
-                [types.KeyboardButton(text="📋 Коды")],
-                [types.KeyboardButton(text="📊 Статистика")]
-            ],
-            resize_keyboard=True
-        )
-        await message.answer("👑 Админ панель", reply_markup=kb)
-        return
-
-    kb = types.ReplyKeyboardMarkup(
-        keyboard=[
-            [types.KeyboardButton(text="🔑 Ввести код")],
-            [types.KeyboardButton(text="🎬 Примеры")]
-        ],
-        resize_keyboard=True
-    )
-
-    await message.answer("👋 Меню", reply_markup=kb)
+        await message.answer("👑 Админ панель", reply_markup=kb.admin_kb())
+    else:
+        await message.answer("👋 Добро пожаловать", reply_markup=kb.user_kb())
 
 
-# ================= НОВЫЙ КОД =================
+# ================= NEW CODE =================
 
 @router.message(F.text == "🎲 Новый код")
 async def new_code(message: types.Message):
@@ -61,10 +48,10 @@ async def new_code(message: types.Message):
     pending[message.from_user.id] = code
     stats["created"] += 1
 
-    await message.answer(f"Код: {code}\nОтправь текст/ссылку/файл")
+    await message.answer(f"🎲 Код: {code}\nОтправь текст/ссылку/файл")
 
 
-# ================= ЗАГРУЗКА =================
+# ================= UPLOAD =================
 
 @router.message()
 async def upload(message: types.Message):
@@ -75,23 +62,23 @@ async def upload(message: types.Message):
     code = pending[message.from_user.id]
 
     if message.document:
-        db.add_code(code, "file", message.document.file_id)
+        db.create_code(code, "file", message.document.file_id)
 
-    elif message.text.startswith("http"):
-        db.add_code(code, "link", message.text)
+    elif message.text.startswith(("http://", "https://")):
+        db.create_code(code, "link", message.text)
 
     else:
-        db.add_code(code, "text", message.text)
+        db.create_code(code, "text", message.text)
 
     del pending[message.from_user.id]
 
-    await message.answer("Сохранено ✅")
+    await message.answer("✅ Сохранено")
 
 
-# ================= ПОЛЬЗОВАТЕЛЬ =================
+# ================= USER REDEEM =================
 
 @router.message()
-async def user(message: types.Message):
+async def redeem(message: types.Message):
 
     if is_admin(message.from_user.id):
         return
@@ -101,10 +88,17 @@ async def user(message: types.Message):
     code = db.get_code(message.text)
 
     if not code:
-        await message.answer("❌ неверный код")
+        await message.answer("❌ Код не найден")
         return
 
-    type_, value = code
+    type_, value, used = code
+
+    if used:
+        await message.answer("⚠️ Код уже использован")
+        return
+
+    db.mark_used(message.text)
+
     stats["used"] += 1
 
     if type_ == "text":
