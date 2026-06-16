@@ -13,6 +13,10 @@ from app.handlers.menu import router as menu_router
 from app.handlers.works import router as works_router
 from app.handlers.referrals import router as referrals_router
 from app.handlers.request import router as request_router
+from app.handlers.code import router as code_router
+
+from app.handlers.admin.admin_menu import router as admin_router
+from app.handlers.admin.create_code import router as admin_create_router
 
 
 async def main():
@@ -29,6 +33,10 @@ async def main():
     dp.include_router(works_router)
     dp.include_router(referrals_router)
     dp.include_router(request_router)
+    dp.include_router(code_router)
+
+    dp.include_router(admin_router)
+    dp.include_router(admin_create_router)
 
     logger.info("Bot started")
 
