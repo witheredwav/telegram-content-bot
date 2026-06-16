@@ -1,9 +1,7 @@
 import aiosqlite
+from config import DB_NAME
 
-DB_NAME = "bot.db"
 
-
-# ================= INIT DB =================
 async def init_db():
     async with aiosqlite.connect(DB_NAME) as db:
 
@@ -21,37 +19,34 @@ async def init_db():
         """)
 
         await db.execute("""
-        CREATE TABLE IF NOT EXISTS events (
-            user_id INTEGER,
-            event TEXT
-        )
-        """)
-
-        await db.execute("""
         CREATE TABLE IF NOT EXISTS referrals (
             user_id INTEGER PRIMARY KEY,
-            code TEXT,
+            ref_code TEXT,
             invites INTEGER DEFAULT 0
         )
         """)
 
         await db.execute("""
-        CREATE TABLE IF NOT EXISTS discounts (
-            user_id INTEGER PRIMARY KEY,
-            percent INTEGER DEFAULT 0
+        CREATE TABLE IF NOT EXISTS stats (
+            key TEXT PRIMARY KEY,
+            value INTEGER
+        )
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS fraud_log (
+            user_id INTEGER,
+            reason TEXT
         )
         """)
 
         await db.commit()
 
 
-# ================= USERS =================
-async def add_user(user_id):
+# USERS
+async def add_user(uid):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "INSERT OR IGNORE INTO users VALUES (?)",
-            (user_id,)
-        )
+        await db.execute("INSERT OR IGNORE INTO users VALUES (?)", (uid,))
         await db.commit()
 
 
@@ -61,85 +56,64 @@ async def users_count():
         return (await cur.fetchone())[0]
 
 
-# ================= CODES =================
+# STATS
+async def add_stat(key):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("""
+        INSERT INTO stats(key,value)
+        VALUES (?,1)
+        ON CONFLICT(key) DO UPDATE SET value=value+1
+        """, (key,))
+        await db.commit()
+
+
+async def get_stat(key):
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT value FROM stats WHERE key=?", (key,))
+        r = await cur.fetchone()
+        return r[0] if r else 0
+
+
+# CODES
 async def add_code(code, content):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "INSERT OR REPLACE INTO codes VALUES (?,?)",
-            (code, content)
-        )
+        await db.execute("INSERT OR REPLACE INTO codes VALUES (?,?)", (code, content))
         await db.commit()
 
 
 async def get_code(code):
     async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute(
-            "SELECT * FROM codes WHERE code=?",
-            (code,)
-        )
+        cur = await db.execute("SELECT * FROM codes WHERE code=?", (code,))
         return await cur.fetchone()
 
 
-async def get_all_codes_full():
+async def delete_code(code):
     async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT code, content FROM codes")
-        return await cur.fetchall()
-
-
-async def delete_code_db(code):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "DELETE FROM codes WHERE code=?",
-            (code,)
-        )
+        await db.execute("DELETE FROM codes WHERE code=?", (code,))
         await db.commit()
 
 
-async def codes_count():
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT COUNT(*) FROM codes")
-        return (await cur.fetchone())[0]
-
-
-# ================= EVENTS =================
-async def add_event(user_id, event):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "INSERT INTO events VALUES (?,?)",
-            (user_id, event)
-        )
-        await db.commit()
-
-
-# ================= REF SYSTEM =================
-async def add_ref_if_valid(user_id: int, code: str):
+# REF SYSTEM
+async def set_ref(user_id, code):
     async with aiosqlite.connect(DB_NAME) as db:
 
-        # уже использовал реф
-        cur = await db.execute(
-            "SELECT 1 FROM referrals WHERE user_id=?",
-            (user_id,)
-        )
+        cur = await db.execute("SELECT 1 FROM referrals WHERE user_id=?", (user_id,))
         if await cur.fetchone():
             return False
 
-        # владелец кода
-        cur = await db.execute(
-            "SELECT user_id FROM referrals WHERE code=?",
-            (code,)
-        )
+        cur = await db.execute("SELECT user_id FROM referrals WHERE ref_code=?", (code,))
         owner = await cur.fetchone()
 
         if owner and owner[0] == user_id:
             return False
 
         await db.execute(
-            "INSERT INTO referrals(user_id, code, invites) VALUES (?,?,0)",
+            "INSERT INTO referrals VALUES (?,?,0)",
             (user_id, code)
         )
 
         await db.execute(
-            "UPDATE referrals SET invites = invites + 1 WHERE code=?",
+            "UPDATE referrals SET invites = invites + 1 WHERE ref_code=?",
             (code,)
         )
 
@@ -147,58 +121,46 @@ async def add_ref_if_valid(user_id: int, code: str):
         return True
 
 
-async def update_ref_level(user_id):
+async def my_ref(user_id):
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT ref_code, invites FROM referrals WHERE user_id=?", (user_id,))
+        return await cur.fetchone()
+
+
+async def add_invites(user_id, amount):
     async with aiosqlite.connect(DB_NAME) as db:
 
-        cur = await db.execute(
-            "SELECT invites FROM referrals WHERE user_id=?",
-            (user_id,)
-        )
+        cur = await db.execute("SELECT invites FROM referrals WHERE user_id=?", (user_id,))
         row = await cur.fetchone()
 
         if not row:
-            return 0
-
-        invites = row[0]
-
-        if invites >= 20:
-            percent = 20
-        elif invites >= 10:
-            percent = 15
-        elif invites >= 5:
-            percent = 10
-        else:
-            percent = 0
-
-        await db.execute("""
-        INSERT INTO discounts(user_id, percent)
-        VALUES (?,?)
-        ON CONFLICT(user_id) DO UPDATE SET percent=excluded.percent
-        """, (user_id, percent))
-
-        await db.commit()
-        return percent
-
-
-# ================= ADMIN REF =================
-async def add_invites(user_id: int, amount: int):
-    async with aiosqlite.connect(DB_NAME) as db:
-
-        cur = await db.execute(
-            "SELECT invites FROM referrals WHERE user_id=?",
-            (user_id,)
-        )
-        row = await cur.fetchone()
-
-        if not row:
-            await db.execute(
-                "INSERT INTO referrals(user_id, code, invites) VALUES (?,?,?)",
-                (user_id, "ADMIN", amount)
-            )
+            await db.execute("INSERT INTO referrals VALUES (?,?,?)", (user_id, "ADMIN", amount))
         else:
             await db.execute(
                 "UPDATE referrals SET invites = invites + ? WHERE user_id=?",
                 (amount, user_id)
             )
 
+        await db.commit()
+
+
+async def remove_invites(user_id, amount):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute(
+            "UPDATE referrals SET invites = MAX(invites - ?, 0) WHERE user_id=?",
+            (amount, user_id)
+        )
+        await db.commit()
+
+
+async def all_refs():
+    async with aiosqlite.connect(DB_NAME) as db:
+        cur = await db.execute("SELECT * FROM referrals")
+        return await cur.fetchall()
+
+
+# FRAUD LOG
+async def fraud(uid, reason):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("INSERT INTO fraud_log VALUES (?,?)", (uid, reason))
         await db.commit()
