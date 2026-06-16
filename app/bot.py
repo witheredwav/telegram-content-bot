@@ -1,12 +1,8 @@
-from aiogram import Bot
-from aiogram.client.default import DefaultBotProperties
-
+from aiogram import Bot, Dispatcher
 from app.utils.config import settings
 
+# 🔥 бот
+bot = Bot(token=settings.BOT_TOKEN)
 
-bot = Bot(
-    token=settings.BOT_TOKEN,
-    default=DefaultBotProperties(
-        parse_mode="HTML"
-    )
-)
+# 🔥 диспетчер (ЭТО ТЫ ЗАБЫЛ)
+dp = Dispatcher()
