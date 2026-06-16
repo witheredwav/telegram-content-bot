@@ -1,237 +1,288 @@
+import random
 import aiosqlite
-from config import DB_NAME
+
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery
+from aiogram.enums import ChatMemberStatus
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+from config import ADMIN_ID, CHANNEL_USERNAME
+from db import *
+from keyboards import start_kb, menu_kb, admin_kb
+
+router = Router()
+
+pending = {}
+pending_delete = {}
+pending_ref_delete = {}
+pending_ref_code = {}
 
 
-# ================= INIT DB =================
-async def init_db():
-    async with aiosqlite.connect(DB_NAME) as db:
+# ================= START =================
+@router.message(F.text.startswith("/start"))
+async def start(msg: Message):
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY
-        )
-        """)
+    await add_user(msg.from_user.id)
+    await add_stat("start")
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS codes (
-            code TEXT PRIMARY KEY,
-            content TEXT
-        )
-        """)
+    await add_event(msg.from_user.id, "start")
 
-        # 📊 события (аналитика)
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS events (
-            user_id INTEGER,
-            event TEXT
-        )
-        """)
-
-        # 👥 рефералы
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS referrals (
-            user_id INTEGER PRIMARY KEY,
-            code TEXT,
-            invites INTEGER DEFAULT 0
-        )
-        """)
-
-        # 💰 скидки
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS discounts (
-            user_id INTEGER PRIMARY KEY,
-            percent INTEGER DEFAULT 0
-        )
-        """)
-
-        await db.commit()
+    await msg.answer("👋 Добро пожаловать", reply_markup=start_kb())
 
 
-# ================= USERS =================
-async def add_user(user_id):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("INSERT OR IGNORE INTO users VALUES (?)", (user_id,))
-        await db.commit()
+# ================= CHECK SUB =================
+@router.callback_query(F.data == "check")
+async def check(cb: CallbackQuery):
+
+    await add_stat("check")
+    await add_event(cb.from_user.id, "check")
+
+    member = await cb.bot.get_chat_member(
+        f"@{CHANNEL_USERNAME}",
+        cb.from_user.id
+    )
+
+    if member.status not in [
+        ChatMemberStatus.MEMBER,
+        ChatMemberStatus.ADMINISTRATOR,
+        ChatMemberStatus.CREATOR
+    ]:
+        await cb.message.answer("❌ Нет подписки")
+        return
+
+    await cb.message.answer("✅ Доступ открыт", reply_markup=menu_kb())
 
 
-async def users_count():
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT COUNT(*) FROM users")
-        return (await cur.fetchone())[0]
+# ================= PORTFOLIO CLICK =================
+@router.callback_query(F.data == "portfolio")
+async def portfolio(cb: CallbackQuery):
+    await add_event(cb.from_user.id, "portfolio")
+    await cb.message.answer("📂 Примеры работ...")
 
 
-# ================= CODES =================
-async def add_code(code, content):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "INSERT OR REPLACE INTO codes VALUES (?,?)",
-            (code, content)
-        )
-        await db.commit()
+# ================= CODE SYSTEM =================
+@router.callback_query(F.data == "code")
+async def code(cb: CallbackQuery):
+    await cb.message.answer("🔑 Введите 5-значный код")
 
 
-async def get_code(code):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute(
-            "SELECT * FROM codes WHERE code=?",
-            (code,)
-        )
-        return await cur.fetchone()
+@router.message(F.text.regexp(r"^\d{5}$"))
+async def enter_code(msg: Message):
+
+    await add_stat("code")
+    await add_event(msg.from_user.id, f"code:{msg.text}")
+
+    data = await get_code(msg.text)
+
+    if not data:
+        await msg.answer("❌ Неверный код")
+        return
+
+    await msg.answer(f"📦 Контент:\n\n{data[1]}")
 
 
-async def get_all_codes_full():
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT code, content FROM codes")
-        return await cur.fetchall()
+# ================= ADMIN =================
+@router.message(F.text == "/admin")
+async def admin(msg: Message):
 
+    if msg.from_user.id != ADMIN_ID:
+        return
 
-async def delete_code_db(code):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("DELETE FROM codes WHERE code=?", (code,))
-        await db.commit()
-
-
-async def codes_count():
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("SELECT COUNT(*) FROM codes")
-        return (await cur.fetchone())[0]
+    await msg.answer("👑 SAAS PANEL", reply_markup=admin_kb())
 
 
 # ================= STATS =================
-async def add_stat(action):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("INSERT INTO stats VALUES (?)", (action,))
-        await db.commit()
+@router.callback_query(F.data == "admin_stats")
+async def stats(cb: CallbackQuery):
+
+    top_refs = await top_events("ref_open")
+    top_codes = await top_events("start")
+    top_portfolio = await top_events("portfolio")
+
+    text = f"""
+📊 SAAS ANALYTICS
+
+👤 Users: {await users_count()}
+📦 Codes: {await codes_count()}
+
+🔥 TOP REF CLICKS:
+{top_refs[:5]}
+
+📂 PORTFOLIO CLICKS:
+{top_portfolio[:5]}
+"""
+
+    await cb.message.answer(text)
 
 
-async def get_stat(action):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute(
-            "SELECT COUNT(*) FROM stats WHERE action=?",
-            (action,)
-        )
-        return (await cur.fetchone())[0]
+# ================= CODES LIST =================
+@router.callback_query(F.data == "admin_codes")
+async def codes(cb: CallbackQuery):
+
+    data = await get_all_codes_full()
+
+    if not data:
+        await cb.message.answer("❌ Нет кодов")
+        return
+
+    kb = []
+
+    for code, content in data:
+        kb.append([
+            InlineKeyboardButton(
+                text=f"🔑 {code}",
+                callback_data=f"del_code:{code}"
+            )
+        ])
+
+    await cb.message.answer(
+        "📦 КОДЫ",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb)
+    )
 
 
-# ================= EVENTS (NEW ANALYTICS) =================
-async def add_event(user_id, event):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "INSERT INTO events VALUES (?,?)",
-            (user_id, event)
-        )
-        await db.commit()
+# ================= DELETE CODE CONFIRM =================
+@router.callback_query(F.data.startswith("del_code:"))
+async def ask_delete(cb: CallbackQuery):
+
+    code = cb.data.split(":")[1]
+    pending_delete[cb.from_user.id] = code
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Удалить", callback_data="confirm_del"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_del")
+        ]
+    ])
+
+    await cb.message.answer(f"⚠️ Удалить код {code}?", reply_markup=kb)
 
 
-async def top_events(event):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute("""
-            SELECT user_id, COUNT(*) as c
-            FROM events
-            WHERE event=?
-            GROUP BY user_id
-            ORDER BY c DESC
-            LIMIT 10
-        """, (event,))
-        return await cur.fetchall()
+@router.callback_query(F.data == "confirm_del")
+async def confirm_delete(cb: CallbackQuery):
+
+    code = pending_delete.get(cb.from_user.id)
+
+    if not code:
+        await cb.message.answer("❌ Нет кода")
+        return
+
+    await delete_code_db(code)
+    pending_delete.pop(cb.from_user.id, None)
+
+    await cb.message.answer(f"🗑 Код удалён")
 
 
-# ================= DISCOUNTS =================
-async def set_discount(user_id, percent):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("""
-        INSERT INTO discounts(user_id, percent)
-        VALUES (?,?)
-        ON CONFLICT(user_id) DO UPDATE SET percent=excluded.percent
-        """, (user_id, percent))
-        await db.commit()
+@router.callback_query(F.data == "cancel_del")
+async def cancel_delete(cb: CallbackQuery):
 
-
-async def get_discount(user_id):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute(
-            "SELECT percent FROM discounts WHERE user_id=?",
-            (user_id,)
-        )
-        res = await cur.fetchone()
-        return res[0] if res else 0
+    pending_delete.pop(cb.from_user.id, None)
+    await cb.message.answer("❌ Отменено")
 
 
 # ================= REF SYSTEM =================
-async def add_ref_if_valid(user_id: int, code: str):
-    async with aiosqlite.connect(DB_NAME) as db:
+@router.callback_query(F.data == "ref")
+async def ref(cb: CallbackQuery):
 
-        # уже есть реферал
-        cur = await db.execute(
-            "SELECT 1 FROM referrals WHERE user_id=?",
-            (user_id,)
-        )
-        if await cur.fetchone():
-            return False
+    await add_event(cb.from_user.id, "ref_open")
 
-        # защита от саморефа
-        cur = await db.execute(
-            "SELECT user_id FROM referrals WHERE code=?",
-            (code,)
-        )
-        owner = await cur.fetchone()
-
-        if owner and owner[0] == user_id:
-            return False
-
-        await db.execute(
-            "INSERT INTO referrals(user_id, code, invites) VALUES (?,?,0)",
-            (user_id, code)
-        )
-
-        await db.execute(
-            "UPDATE referrals SET invites = invites + 1 WHERE code=?",
-            (code,)
-        )
-
-        await db.commit()
-        return True
+    await cb.message.answer("👥 Введите ваш реф код:")
+    pending_ref_code[cb.from_user.id] = True
 
 
-async def update_ref_level(user_id):
-    async with aiosqlite.connect(DB_NAME) as db:
+@router.message()
+async def ref_enter(msg: Message):
 
-        cur = await db.execute(
-            "SELECT invites FROM referrals WHERE user_id=?",
-            (user_id,)
-        )
-        row = await cur.fetchone()
+    if msg.from_user.id in pending_ref_code:
 
-        if not row:
-            return 0
+        code = msg.text.strip()
 
-        invites = row[0]
+        ok = await add_ref_if_valid(msg.from_user.id, code)
 
-        if invites >= 20:
-            percent = 20
-        elif invites >= 10:
-            percent = 15
-        elif invites >= 5:
-            percent = 10
-        else:
-            percent = 0
+        if not ok:
+            await msg.answer("⚠️ Реферал не засчитан")
+            pending_ref_code.pop(msg.from_user.id)
+            return
 
-        await set_discount(user_id, percent)
-        return percent
+        percent = await update_ref_level(msg.from_user.id)
+
+        await msg.answer(f"🎉 Реферал засчитан\n💰 Скидка: {percent}%")
+
+        if percent in [10, 15, 20]:
+            await msg.answer(f"🏆 Новый уровень скидки: {percent}%")
+
+        pending_ref_code.pop(msg.from_user.id)
+        return
+
+    # CREATE CODE SAVE (ADMIN)
+    if msg.from_user.id in pending:
+        code = pending[msg.from_user.id]
+
+        await add_code(code, msg.text)
+
+        pending.pop(msg.from_user.id)
+
+        await msg.answer("✅ Сохранено")
 
 
-async def get_all_refs():
-    async with aiosqlite.connect(DB_NAME) as db:
-        cur = await db.execute(
-            "SELECT user_id, code, invites FROM referrals"
-        )
-        return await cur.fetchall()
+# ================= REF ADMIN =================
+@router.callback_query(F.data == "admin_refs")
+async def refs(cb: CallbackQuery):
+
+    data = await get_all_refs()
+
+    kb = []
+
+    for user_id, code, invites in data:
+        kb.append([
+            InlineKeyboardButton(
+                text=f"👤 {user_id} | {invites}",
+                callback_data=f"ref_open:{user_id}"
+            )
+        ])
+
+    await cb.message.answer(
+        "👥 РЕФЕРАЛЫ",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb)
+    )
 
 
-async def delete_ref(user_id):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "DELETE FROM referrals WHERE user_id=?",
-            (user_id,)
-        )
-        await db.commit()
+@router.callback_query(F.data.startswith("ref_del:"))
+async def ref_del(cb: CallbackQuery):
+
+    user_id = int(cb.data.split(":")[1])
+    pending_ref_delete[cb.from_user.id] = user_id
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Удалить", callback_data="confirm_ref_del"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_ref_del")
+        ]
+    ])
+
+    await cb.message.answer(
+        f"⚠️ Удалить реферала {user_id}?",
+        reply_markup=kb
+    )
+
+
+@router.callback_query(F.data == "confirm_ref_del")
+async def confirm_ref_del(cb: CallbackQuery):
+
+    user_id = pending_ref_delete.get(cb.from_user.id)
+
+    if not user_id:
+        await cb.message.answer("❌ Нет данных")
+        return
+
+    await delete_ref(user_id)
+    pending_ref_delete.pop(cb.from_user.id, None)
+
+    await cb.message.answer("🗑 Удалено")
+
+
+@router.callback_query(F.data == "cancel_ref_del")
+async def cancel_ref_del(cb: CallbackQuery):
+
+    pending_ref_delete.pop(cb.from_user.id, None)
+    await cb.message.answer("❌ Отменено")
