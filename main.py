@@ -1,70 +1,38 @@
 import asyncio
+import logging
 
-from aiogram import Dispatcher
+from aiogram import Bot, Dispatcher
 
-from app.bot import bot
-from app.utils.logger import logger
+from app.utils.config import settings
 from app.database.migrate import run_migrations
 
-# ================= USER ROUTES =================
 from app.handlers.start import router as start_router
-from app.handlers.subscription import router as subscription_router
-from app.handlers.menu import router as menu_router
-from app.handlers.works import router as works_router
 from app.handlers.referrals import router as referrals_router
-from app.handlers.request import router as request_router
-from app.handlers.code import router as code_router
-from app.handlers.request_flow import router as request_flow_router
-
-# ================= ADMIN ROUTES =================
-from app.handlers.admin.admin_menu import router as admin_router
-from app.handlers.admin.dashboard import router as dashboard_router
-from app.handlers.admin.create_code import router as admin_create_router
-from app.handlers.admin.stats import router as stats_router
-from app.handlers.admin.requests_admin import router as admin_requests_router
-from app.handlers.admin.analytics import router as analytics_router
-from app.handlers.admin.orders_admin import router as orders_router
-from app.handlers.admin.audit import router as audit_router
-
-# ================= MIDDLEWARE =================
-from app.middleware.antifraud import AntiFraudMiddleware
 
 
 async def main():
+    # Логирование
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(message)s"
+    )
 
-    logger.info("🚀 Bot starting...")
+    print("Starting bot...")
 
-    # миграции БД
-    run_migrations()
+    # 1. Инициализация базы данных
+    await run_migrations()
 
+    print("Database ready")
+
+    # 2. Создаём бота
+    bot = Bot(token=settings.BOT_TOKEN)
     dp = Dispatcher()
 
-    # ================= USER =================
+    # 3. Подключаем роутеры
     dp.include_router(start_router)
-    dp.include_router(subscription_router)
-    dp.include_router(menu_router)
-    dp.include_router(works_router)
     dp.include_router(referrals_router)
-    dp.include_router(request_router)
-    dp.include_router(code_router)
-    dp.include_router(request_flow_router)
 
-    # ================= ADMIN =================
-    dp.include_router(admin_router)
-    dp.include_router(dashboard_router)
-    dp.include_router(admin_create_router)
-    dp.include_router(stats_router)
-    dp.include_router(admin_requests_router)
-    dp.include_router(analytics_router)
-    dp.include_router(orders_router)
-    dp.include_router(audit_router)
-
-    # ================= MIDDLEWARE =================
-    dp.message.middleware(AntiFraudMiddleware())
-    dp.callback_query.middleware(AntiFraudMiddleware())
-
-    logger.info("✅ Bot started successfully")
-
+    # 4. Запуск polling
     await dp.start_polling(bot)
 
 
