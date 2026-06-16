@@ -1,7 +1,7 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 CHANNEL_LINK = "https://t.me/witheredoff"
-WORKS_LINK = "https://t.me/witheredwave"
+WORKS_LINK = "https://t.me/witheredwav"
 
 
 def start_kb():
