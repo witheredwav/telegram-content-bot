@@ -158,7 +158,7 @@ async def save_content(msg: Message):
 
 
 # ================= STATS =================
-@router.message(F.text == "/stats")
+@router.message(F.text.startswith("/stats"))
 async def stats(msg: Message):
 
     if msg.from_user.id != ADMIN_ID:
