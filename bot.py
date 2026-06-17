@@ -41,12 +41,16 @@ def save_db(db: dict):
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
 
-def track(event: str):
+def track(event: str, user_id: int):
     db = load_db()
     today = datetime.now().strftime("%Y-%m-%d")
-    db["stats"]["total"][event] = db["stats"]["total"].get(event, 0) + 1
-    db["stats"]["daily"].setdefault(today, {})
-    db["stats"]["daily"][today][event] = db["stats"]["daily"][today].get(event, 0) + 1
+    uid = str(user_id)
+    total_users = db["stats"].setdefault("total", {}).setdefault(event, [])
+    if uid not in total_users:
+        total_users.append(uid)
+    day_users = db["stats"].setdefault("daily", {}).setdefault(today, {}).setdefault(event, [])
+    if uid not in day_users:
+        day_users.append(uid)
     save_db(db)
 
 def get_stats_text() -> str:
@@ -61,12 +65,14 @@ def get_stats_text() -> str:
         "order":     "💬 Заказать сведение",
         "enter_key": "🔑 Ввод ключа",
     }
-    lines = ["📊 *Статистика кликов*\n", "*За сегодня:*"]
+    lines = ["📊 *Статистика уникальных пользователей*\n", "*За сегодня:*"]
     for e, label in events.items():
-        lines.append(f"  {label}: {daily.get(e, 0)}")
+        day_count = len(daily.get(e, []))
+        lines.append(f"  {label}: {day_count} чел.")
     lines.append("\n*Всего за всё время:*")
     for e, label in events.items():
-        lines.append(f"  {label}: {total.get(e, 0)}")
+        total_count = len(total.get(e, []))
+        lines.append(f"  {label}: {total_count} чел.")
     return "\n".join(lines)
 
 def next_free_code() -> str | None:
@@ -98,8 +104,8 @@ def kb_page1() -> InlineKeyboardMarkup:
 
 def kb_page2() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎧 Примеры работ",     url=WORKS_CHANNEL_LINK)],
-        [InlineKeyboardButton(text="💬 Заказать сведение",  url=DM_LINK)],
+        [InlineKeyboardButton(text="🎧 Примеры работ",     callback_data="btn_works")],
+        [InlineKeyboardButton(text="💬 Заказать сведение",  callback_data="btn_order")],
         [InlineKeyboardButton(text="🔑 Ввести ключ",        callback_data="enter_key")],
         [InlineKeyboardButton(text="◀️ Назад",              callback_data="back_to_page1")],
     ])
@@ -171,7 +177,7 @@ async def is_subscribed(user_id: int) -> bool:
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
-    track("start")
+    track("start", message.from_user.id)
     await message.answer(
         "👋 Привет!\n\n"
         "Чтобы получить доступ к боту — подпишись на наш канал и нажми *«Проверить подписку»*.",
@@ -181,7 +187,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data == "check_sub")
 async def cb_check_sub(callback: types.CallbackQuery):
-    track("check_sub")
+    track("check_sub", callback.from_user.id)
     if await is_subscribed(callback.from_user.id):
         await callback.message.edit_text(
             "✅ Подписка подтверждена!\n\nДобро пожаловать. Выбери действие:",
@@ -203,9 +209,32 @@ async def cb_back_page1(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=kb_page1()
     )
 
+@dp.callback_query(F.data == "btn_works")
+async def cb_btn_works(callback: types.CallbackQuery):
+    track("works", callback.from_user.id)
+    await callback.answer("Открываю канал с примерами...", show_alert=False)
+    # Отправляем ссылку отдельным сообщением (url-кнопки не поддерживают track)
+    await callback.message.answer(
+        f"🎧 Примеры работ: {WORKS_CHANNEL_LINK}",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="🎧 Открыть канал", url=WORKS_CHANNEL_LINK)]
+        ])
+    )
+
+@dp.callback_query(F.data == "btn_order")
+async def cb_btn_order(callback: types.CallbackQuery):
+    track("order", callback.from_user.id)
+    await callback.answer("Открываю контакт...", show_alert=False)
+    await callback.message.answer(
+        f"💬 Написать для заказа сведения: {DM_LINK}",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="💬 Написать", url=DM_LINK)]
+        ])
+    )
+
 @dp.callback_query(F.data == "enter_key")
 async def cb_enter_key(callback: types.CallbackQuery, state: FSMContext):
-    track("enter_key")
+    track("enter_key", callback.from_user.id)
     if not await is_subscribed(callback.from_user.id):
         await callback.answer("❌ Сначала подпишись на канал!", show_alert=True)
         return
